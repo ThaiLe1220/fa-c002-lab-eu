@@ -8,6 +8,9 @@ Module 2: Cloud Data Warehousing & Transformation with dbt
 
 - **[Complete Setup Guide](./docs/00_setup_guide.md)** - Step-by-step instructions with explanations
 - **[Quick Start](./docs/quick_start.md)** - Copy-paste commands for fast setup
+- **[Snowflake Setup](./docs/snowflake_setup.md)** - Snowflake connection configuration
+- **[Sample Data](./docs/01_sample_data.md)** - Creating sample data in Snowflake
+- **[First Model](./docs/02_first_model.md)** - Your first dbt staging model ✅
 
 ---
 
@@ -66,9 +69,17 @@ fa-c002-lab/
 - [x] Python virtual environment
 - [x] dbt installation (v1.10.13)
 - [x] dbt project structure
-- [ ] Snowflake configuration
-- [ ] First staging model
-- [ ] Testing and validation
+- [x] Snowflake configuration ✅
+- [x] Sample data created ✅
+- [x] First staging model (`stg_customers`) ✅
+- [x] All tests passing (8/8) ✅
+
+## 🎉 What's Working
+
+**Live in Snowflake:**
+- Source: `DB_T34.RAW.CUSTOMERS` (10 rows)
+- Model: `DB_T34.PUBLIC.STG_CUSTOMERS` (transformed data)
+- Tests: 8 data quality tests all passing
 
 ---
 

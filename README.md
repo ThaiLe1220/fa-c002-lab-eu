@@ -1,102 +1,100 @@
-# FA-C002 Lab - dbt Learning Project
+# FA-C002 Lab - Data Engineering Test Prep
 
-Module 2: Cloud Data Warehousing & Transformation with dbt
+**Mid-Course Test:** Oct 29 & Nov 1, 2025 | **11 days remaining**
+**Target Score:** 70+ points (Pass: 50+)
 
----
+## Quick Commands
 
-## 📚 Documentation
-
-### Getting Started
-- **[Complete Setup Guide](./docs/00_setup_guide.md)** - Step-by-step instructions with explanations
-- **[Quick Start](./docs/quick_start.md)** - Copy-paste commands for fast setup
-- **[Snowflake Setup](./docs/snowflake_setup.md)** - Snowflake connection configuration
-- **[Sample Data](./docs/01_sample_data.md)** - Creating sample data in Snowflake
-- **[First Model](./docs/02_first_model.md)** - Your first dbt staging model ✅
-
-### Learning Modules 🎓
-- **[Learning Overview](./docs/learning/00_overview.md)** - Complete learning journey summary
-- **[Module 1: Project Setup](./docs/learning/01_project_setup.md)** - Professional project foundation
-- **[Module 2: Snowflake Basics](./docs/learning/02_snowflake_basics.md)** - Cloud data warehousing
-- **[Module 3: dbt Fundamentals](./docs/learning/03_dbt_fundamentals.md)** - Transformation framework
-- **[Module 4: Data Modeling](./docs/learning/04_data_modeling.md)** - Staging layer patterns
-- **[Module 5: Professional Practices](./docs/learning/05_professional_practices.md)** - Software engineering best practices
-
----
-
-## 🎯 Project Goals
-
-Learn modern data transformation techniques using:
-- **dbt (data build tool)** - SQL-based transformation framework
-- **Snowflake** - Cloud data warehouse
-- **Dimensional modeling** - Star schema design
-- **CI/CD** - Automated testing and deployment
-
----
-
-## 🚀 Quick Start
-
-### Activate Environment
 ```bash
-cd /Users/lehongthai/code_personal/fa-c002-lab/my_dbt_project
-source ../.venv/bin/activate
+# Activate environment
+cd my_dbt_project && source ../.venv/bin/activate
+
+# dbt workflow
+dbt debug && dbt run && dbt test
 ```
 
-### Run dbt
-```bash
-dbt debug           # Test connection
-dbt run             # Run models
-dbt test            # Run tests
-```
+## Current Status
 
----
+**Learning Phase Complete:**
+- ✅ Environment setup mastered
+- ✅ Snowflake connection understood
+- ✅ dbt fundamentals learned (mock data only)
+- ✅ Git basics understood
 
-## 📁 Project Structure
+**REAL PROJECT NOT STARTED YET:**
+- ❌ Data choice not finalized
+- ❌ All test requirements pending (0/100 pts)
+- ❌ No production code written
 
-```
+**Next Phase: Planning & Data Selection**
+
+## Test Requirements (All Pending - 0/100 pts)
+
+| Section | Points | What's Needed |
+|---------|--------|---------------|
+| **1. Data Ingestion** | 35 | Git workflow + Python pipelines + Docker PostgreSQL |
+| **2. Transformation** | 40 | Multi-layer dbt models + incremental + macro + ERD |
+| **3. CI/CD** | 5 | GitHub Actions workflow |
+| **4. Extra Features** | 20 | Optional (1-2 advanced features) |
+
+**Full Details:** [Test Criteria](./docs/goal/midcourse_test_criteria.md)
+
+## Planning Phase: Data Selection
+
+**Key Decision: Choose business domain & dataset**
+
+**Criteria:**
+- Real-world applicable
+- Multiple entities (customers, orders, products, etc.)
+- Enables dimensional modeling (star schema)
+- Supports business analysis questions
+- Available via API or bulk download (500+ rows)
+
+**Options to Consider:**
+- E-commerce data
+- Financial transactions
+- Healthcare/fitness tracking
+- Social media analytics
+- IoT/sensor data
+- Public datasets (Kaggle, government APIs, etc.)
+
+## Project Structure
+
+```text
 fa-c002-lab/
-├── docs/                      # Documentation
-│   ├── 00_setup_guide.md     # Complete setup guide
-│   └── quick_start.md         # Quick reference commands
-├── my_dbt_project/           # dbt project
-│   ├── models/
-│   │   ├── 01_staging/       # Staging layer
-│   │   ├── 02_intermediate/  # Business logic layer
-│   │   └── 03_mart/          # Analytics layer
-│   ├── macros/               # SQL macros
-│   ├── tests/                # Data tests
-│   └── dbt_project.yml       # Configuration
-├── .venv/                    # Python virtual environment
-├── pyproject.toml            # Dependencies
-└── README.md                 # This file
+├── CLAUDE.md                  # Project philosophy
+├── docs/
+│   ├── goal/                  # Test requirements
+│   ├── 00_setup_guide.md      # Technical setup
+│   └── quick_start.md         # Command reference
+├── my_dbt_project/
+│   └── models/
+│       ├── 01_staging/        # ✅ stg_customers
+│       ├── 02_intermediate/   # ❌ Empty
+│       └── 03_mart/           # ❌ Empty
+└── pipelines/                 # ❌ Doesn't exist yet
 ```
 
----
+## Tech Stack
 
-## ✅ Setup Status
+- **dbt 1.10.13** - Transformations
+- **Snowflake** - Cloud warehouse (DB_T34)
+- **Python 3.12** - Pipeline scripts
+- **Docker** - PostgreSQL (to be set up)
+- **GitHub Actions** - CI/CD (to be set up)
 
-- [x] Project initialization
-- [x] Python virtual environment
-- [x] dbt installation (v1.10.13)
-- [x] dbt project structure
-- [x] Snowflake configuration ✅
-- [x] Sample data created ✅
-- [x] First staging model (`stg_customers`) ✅
-- [x] All tests passing (8/8) ✅
+## Documentation
 
-## 🎉 What's Working
+- [Setup Reference](./docs/00_setup_guide.md)
+- [Quick Commands](./docs/quick_start.md)
+- [Snowflake Config](./docs/snowflake_setup.md)
+- [Sample Data](./docs/01_sample_data.md)
+- [Staging Models](./docs/02_first_model.md)
+- [Test Criteria](./docs/goal/midcourse_test_criteria.md)
 
-**Live in Snowflake:**
-- Source: `DB_T34.RAW.CUSTOMERS` (10 rows)
-- Model: `DB_T34.PUBLIC.STG_CUSTOMERS` (transformed data)
-- Tests: 8 data quality tests all passing
+## Philosophy
 
----
-
-## 🔗 Resources
-
-- [dbt Documentation](https://docs.getdbt.com/)
-- [Snowflake Documentation](https://docs.snowflake.com/)
-- [Lab Instructions](../fa-c002-hub/content/M02/)
+**Lean, test-driven, business-focused.** See [CLAUDE.md](./CLAUDE.md) for project coding principles.
 
 ---
 

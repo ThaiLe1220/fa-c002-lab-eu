@@ -1,8 +1,6 @@
-# Creating Sample Data in Snowflake
+# Sample Data Reference
 
-## Step 1: Run this SQL in Snowflake Worksheets
-
-Copy and paste this into your Snowflake web interface:
+## Create Raw Table
 
 ```sql
 -- Create a simple RAW schema for source data
@@ -37,24 +35,17 @@ SELECT * FROM DB_T34.RAW.CUSTOMERS;
 SELECT COUNT(*) FROM DB_T34.RAW.CUSTOMERS;
 ```
 
-## Step 2: Verify in Snowflake
+## Source Definition
 
-You should see:
-- ✅ Schema `RAW` created
-- ✅ Table `CUSTOMERS` created
-- ✅ 10 rows inserted
+**File:** `models/01_staging/_sources.yml`
 
----
+```yaml
+version: 2
 
-## What We Created
-
-**Simple customer data with:**
-- `customer_id` - Unique ID
-- `customer_name` - Full name
-- `email` - Email address
-- `city` - Location
-- `signup_date` - When they joined
-- `total_orders` - Number of orders
-- `total_spent` - Total money spent
-
-**This is our "raw" data that dbt will transform!**
+sources:
+  - name: raw
+    database: DB_T34
+    schema: RAW
+    tables:
+      - name: customers
+```

@@ -54,24 +54,3 @@ my_dbt_project:
       schema: PUBLIC
       threads: 4
 ```
-
----
-
-## 5. Test Connection
-
-```bash
-cd /Users/lehongthai/code_personal/fa-c002-lab/my_dbt_project
-source ../.venv/bin/activate
-dbt debug
-```
-
-Should see: **"All checks passed!"**
-
----
-
-## Done.
-
-Run dbt commands:
-- `dbt run` - Execute models
-- `dbt test` - Run tests
-- `dbt docs generate && dbt docs serve` - View docs

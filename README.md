@@ -6,11 +6,20 @@ Module 2: Cloud Data Warehousing & Transformation with dbt
 
 ## 📚 Documentation
 
+### Getting Started
 - **[Complete Setup Guide](./docs/00_setup_guide.md)** - Step-by-step instructions with explanations
 - **[Quick Start](./docs/quick_start.md)** - Copy-paste commands for fast setup
 - **[Snowflake Setup](./docs/snowflake_setup.md)** - Snowflake connection configuration
 - **[Sample Data](./docs/01_sample_data.md)** - Creating sample data in Snowflake
 - **[First Model](./docs/02_first_model.md)** - Your first dbt staging model ✅
+
+### Learning Modules 🎓
+- **[Learning Overview](./docs/learning/00_overview.md)** - Complete learning journey summary
+- **[Module 1: Project Setup](./docs/learning/01_project_setup.md)** - Professional project foundation
+- **[Module 2: Snowflake Basics](./docs/learning/02_snowflake_basics.md)** - Cloud data warehousing
+- **[Module 3: dbt Fundamentals](./docs/learning/03_dbt_fundamentals.md)** - Transformation framework
+- **[Module 4: Data Modeling](./docs/learning/04_data_modeling.md)** - Staging layer patterns
+- **[Module 5: Professional Practices](./docs/learning/05_professional_practices.md)** - Software engineering best practices
 
 ---
 

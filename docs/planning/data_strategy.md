@@ -2,24 +2,31 @@
 
 **Project Goal:** Build a production-grade data warehouse that delivers real business value to mobile app publishers while passing mid-course test requirements.
 
+**Status:** ✅ API Validation Complete (see `api_validation_results.md`)
+
 **Success Criteria:**
 - Pass mid-course test (70+ points)
 - Provide actionable insights for mobile app business decisions
 - Handle real-world data volumes efficiently
 - Industry-standard architecture and practices
 
+**Key Findings from API Validation:**
+- AdMob: Daily granularity only, 13.5K rows/day
+- Adjust: **Hourly granularity available**, 936 rows/day
+- Cohort retention data available (D0, D1, D7, D30)
+- IAP revenue NOT tracked
+
 ---
 
 ## Table of Contents
 
 1. [Business Problem & Value](#business-problem--value)
-2. [Data Architecture Overview](#data-architecture-overview)
-3. [Data Sources & Metrics](#data-sources--metrics)
-4. [Validation Roadmap](#validation-roadmap)
-5. [Data Transformation Layers](#data-transformation-layers)
-6. [Dimensional Model Design](#dimensional-model-design)
-7. [Execution Timeline](#execution-timeline)
-8. [Success Metrics](#success-metrics)
+2. [Validated Data Sources](#validated-data-sources)
+3. [Data Architecture Overview](#data-architecture-overview)
+4. [Data Transformation Layers](#data-transformation-layers)
+5. [Dimensional Model Design](#dimensional-model-design)
+6. [Execution Timeline](#execution-timeline)
+7. [Success Metrics](#success-metrics)
 
 ---
 
@@ -105,292 +112,142 @@ Your existing analytics team focuses on these daily metrics:
 
 ---
 
+## Validated Data Sources
+
+### AdMob API - Ad Revenue (Daily Granularity)
+
+✅ **Confirmed Available:**
+- **Dimensions:** APP, DATE, COUNTRY, PLATFORM, FORMAT, AD_UNIT
+- **Metrics:** ESTIMATED_EARNINGS, IMPRESSIONS, CLICKS, AD_REQUESTS, MATCHED_REQUESTS, OBSERVED_ECPM
+- **Granularity:** Daily only (HOUR dimension NOT available)
+- **Volume:** 13,508 rows/day → 1.2M rows for 90 days
+- **Historical Depth:** 365+ days
+
+❌ **NOT Available:**
+- Hourly time granularity
+- IAP revenue tracking
+
+**Use Case:** Daily revenue analysis, ad format performance, platform comparison
+
+### Adjust API - User Acquisition (Hourly + Daily)
+
+✅ **Confirmed Available:**
+- **Dimensions:** app, store_id, day, **hour**, country_code, country, os_name
+- **Metrics:** installs, daus, ad_revenue, ad_impressions, network_cost, network_cost_diff
+- **Cohort Metrics:** cohort_size_d0, cohort_size_d1, cohort_size_d7, cohort_size_d30
+- **Granularity:** **HOURLY available** (936 rows/day)
+- **Volume:** Daily 2,216 rows/day, Hourly 936 rows/day
+- **Historical Depth:** 365+ days
+
+❌ **NOT Available:**
+- IAP revenue (not configured in SDK)
+
+**Use Case:** Real-time acquisition tracking, cohort retention, marketing ROI, hourly trends
+
+---
+
 ## Data Architecture Overview
 
-### Industry Standard: Hot vs Cold Storage
+### Validated Architecture: Hot vs Cold Storage
 
-Real companies don't keep all data in one database. They use a two-tier architecture:
-
-**Hot Storage (PostgreSQL) - Operational Database**
-- **Purpose:** Fast access to recent data for operational decisions
-- **Data Retained:** Last 30 days of detailed data
-- **Update Frequency:** Every hour (real-time pipeline)
+**Hot Storage (PostgreSQL) - Real-Time Operational**
+- **Source:** Adjust API only (hourly granularity)
+- **Data Retained:** Last 14 days
+- **Update Frequency:** Every 1-3 hours
+- **Metrics:** Hourly installs, DAUs, ad_revenue, network_cost
+- **Volume:** 936 × 14 = 13,104 rows (tiny)
 - **Use Case:** "What's happening RIGHT NOW?"
-- **Who Uses It:** Operations team, real-time dashboards, alerting systems
-- **Cost:** Expensive (fast databases cost more)
+- **Who Uses It:** Operations team, campaign monitoring, real-time dashboards
 
-**Cold Storage (Snowflake) - Analytical Warehouse**
-- **Purpose:** All historical data for strategic analysis
-- **Data Retained:** Forever (all historical data)
-- **Update Frequency:** Once daily (batch pipeline)
-- **Use Case:** "What patterns exist over 6 months?"
-- **Who Uses It:** Analytics team, business intelligence, strategic planning
-- **Cost:** Cheap (columnar storage, compressed)
+**Cold Storage (Snowflake) - Historical Analytics**
+- **Source:** Both AdMob (daily) + Adjust (daily aggregations)
+- **Data Retained:** Forever
+- **Update Frequency:** Daily (1-2x/day)
+- **Volume:** 5.7M rows/year (very manageable)
+- **Use Case:** "What patterns exist over time?"
+- **Who Uses It:** Strategic analysis, cohort retention, LTV modeling
 
-**The Key Insight:** You never delete data. You move it from hot to cold storage.
-
-### Data Flow Architecture
+### Revised Data Flow
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    DATA SOURCES                              │
-├─────────────────────────────────────────────────────────────┤
-│  AdMob API                    │  Adjust API                  │
-│  - Revenue & Impressions      │  - User Acquisition          │
-│  - Ad Performance             │  - Retention Cohorts         │
-│  - Hourly + Daily Data        │  - Marketing Costs           │
-└──────────────┬────────────────┴──────────────┬───────────────┘
-               │                                │
-               │                                │
-    ┌──────────▼──────────┐          ┌─────────▼──────────┐
-    │  REAL-TIME PIPELINE │          │  BATCH PIPELINE     │
-    │  (Every Hour)       │          │  (Daily)            │
-    └──────────┬──────────┘          └─────────┬──────────┘
-               │                                │
-               │                                │
-    ┌──────────▼──────────┐          ┌─────────▼──────────┐
-    │   PostgreSQL        │          │   Snowflake         │
-    │   (Last 30 days)    │──Archive→│   (All History)     │
-    │   Fast queries      │  Daily   │   Deep analytics    │
-    └──────────┬──────────┘          └─────────┬──────────┘
-               │                                │
-               │                                │
-               └────────────┬───────────────────┘
-                            │
-                   ┌────────▼────────┐
-                   │   dbt Transform  │
-                   │   Raw → Staging  │
-                   │   → Intermediate │
-                   │   → Mart         │
-                   └────────┬────────┘
-                            │
-               ┌────────────┴────────────┐
-               │                         │
-    ┌──────────▼──────────┐   ┌─────────▼──────────┐
-    │  Business Dashboards│   │  AI Agent (Future) │
-    │  Operational Alerts │   │  Natural Language  │
-    │  Executive Reports  │   │  Query Interface   │
-    └─────────────────────┘   └────────────────────┘
+Adjust API (hourly)
+    ↓
+PostgreSQL (last 14 days) → Real-time dashboards
+    ↓ Archive daily
+Snowflake (daily aggregations) → Strategic analysis
+
+AdMob API (daily)
+    ↓
+Snowflake only → Revenue analysis
 ```
 
 ### Why This Architecture?
 
-**Real-Time Pipeline (PostgreSQL):**
-- Marketing manager sees campaign spending too much → pause it NOW
-- Revenue drops 50% in last hour → investigate server issues
-- New app launched → monitor performance in real-time
+**Real-Time Pipeline (PostgreSQL + Adjust hourly):**
+- Campaign manager sees install spike at 2pm → increase budget NOW
+- Hourly ROI drops below threshold → pause campaign immediately
+- Peak hour analysis: installs highest 8pm-11pm in India
+- Real-time arbitrage: Brazil installs cheaper during morning hours
 
-**Batch Pipeline (Snowflake):**
-- CFO asks "What was our revenue growth last quarter?"
-- Product team analyzes "Which countries have best 30-day retention?"
-- Data scientist builds LTV prediction model using 6 months of cohort data
+**Batch Pipeline (Snowflake + both sources):**
+- CFO asks "What was Q3 revenue growth?"
+- Product team: "Which countries have best 30-day retention?"
+- Data scientist builds LTV model using 6 months cohort data
+- Marketing: "Compare AdMob revenue vs Adjust ad_revenue for reconciliation"
 
 **Archive Process:**
-- Every night, data older than 30 days moves from PostgreSQL to Snowflake
-- PostgreSQL stays fast (less data)
-- Snowflake stores everything (cheap storage)
-- Nothing is ever deleted
+- Every night, Adjust hourly data aggregated to daily → Snowflake
+- PostgreSQL stays fast (14 days only)
+- Snowflake stores everything forever (cheap)
+- AdMob data goes straight to Snowflake (daily already)
 
 ---
 
-## Data Sources & Metrics
+## Validated Data Volumes
 
-### AdMob API - Revenue & Monetization Data
+✅ **API validation complete** - See `api_validation_results.md` for full details
 
-AdMob provides detailed ad performance data showing how your apps make money.
+### AdMob - Actual Volumes (Tested Oct 18, 2025)
 
-**Dimensions (How to Slice the Data):**
+**Configuration:** APP, DATE, COUNTRY, PLATFORM, FORMAT, AD_UNIT
 
-*Time Dimensions:*
-- **DATE** - Daily breakdown
-- **HOUR** - Hourly breakdown (for real-time tracking)
-- **WEEK, MONTH** - Aggregated views
+**Actual Data:**
+- Basic (no FORMAT/AD_UNIT): 1,644 rows/day
+- With FORMAT: 5,127 rows/day
+- Full dimensions: **13,508 rows/day**
 
-*App Dimensions:*
-- **APP** - Which application
-- **AD_UNIT** - Specific ad placement within app (e.g., "home_screen_banner", "game_over_interstitial")
-- **FORMAT** - Ad type (banner, interstitial, rewarded video, native, app open)
+**90-Day Projection:**
+- 13,508 × 90 = **1,215,720 rows** (1.2M)
 
-*Geographic & Platform:*
-- **COUNTRY** - User location
-- **PLATFORM** - iOS or Android
+**Historical Depth:** 365+ days confirmed
 
-*Monetization Network:*
-- **AD_SOURCE** - Which ad network filled the ad (AdMob Network, Meta Audience Network, Unity Ads, etc.)
+### Adjust - Actual Volumes (Tested Oct 18, 2025)
 
-**Metrics (What to Measure):**
+**Daily Granularity:**
+- Full dimensions: **2,216 rows/day**
+- 90-day projection: 199,440 rows
 
-*Revenue Metrics:*
-- **ESTIMATED_EARNINGS** - Actual money made (the main metric)
-- **OBSERVED_ECPM** - Effective cost per 1000 impressions (revenue efficiency indicator)
+**Hourly Granularity:**
+- app, day, hour: **936 rows/day**
+- 90-day projection: 84,240 rows
 
-*Volume Metrics:*
-- **IMPRESSIONS** - How many ads were shown
-- **CLICKS** - How many ads were clicked
-- **AD_REQUESTS** - How many times app asked for an ad
+**Historical Depth:** 365+ days confirmed
 
-*Performance Metrics:*
-- **MATCHED_REQUESTS** - How many ad requests got filled with an ad
-- **MATCH_RATE** - Percentage of requests that got filled (inventory health)
-- **SHOW_RATE** - Percentage of matched ads actually displayed (technical health)
-- **CLICK_THROUGH_RATE** - Percentage of impressions that got clicked
+### Combined Storage Requirements
 
-**Business Value of Each Metric:**
+**PostgreSQL (Hot - 14 days):**
+- Adjust hourly: 936 × 14 = **13,104 rows** (negligible)
+- Storage: <10 MB
 
-- **ESTIMATED_EARNINGS:** The money. Self-explanatory.
-- **OBSERVED_ECPM:** Which ad format or placement makes most money per impression? Should you show more rewarded videos (high eCPM) or banners (high volume)?
-- **MATCH_RATE:** Are ad networks able to fill your requests? Low match rate means lost revenue opportunity.
-- **SHOW_RATE:** Are ads loading correctly? Low show rate indicates technical issues.
-- **AD_UNIT performance:** Which placements in your app monetize best? Home screen? After level completion?
+**Snowflake (Cold - Forever):**
+- AdMob daily: 13,508 × 365 = **4.9M rows/year**
+- Adjust daily: 2,216 × 365 = **809K rows/year**
+- **Total:** 5.7M rows/year
+- Storage: ~200 MB/year (compressed columnar)
 
-### Adjust API - User Acquisition & Behavior Data
-
-Adjust tracks user acquisition, engagement, and attribution (which marketing campaign brought each user).
-
-**Dimensions:**
-
-*Time & App:*
-- **day** - Date
-- **app, store_id** - Application identifier
-- **country_code, os_name** - Geographic and platform
-
-*Marketing Attribution:*
-- **tracker_name** - Marketing campaign name
-- **creative_name** - Which ad creative (image/video) was shown
-- **network** - Ad platform (Facebook Ads, Google Ads, TikTok Ads, etc.)
-
-*Cohort Analysis:*
-- **cohort_maturity** - Days since install (D0, D1, D7, D30)
-
-**Metrics:**
-
-*Acquisition Metrics:*
-- **installs** - New users acquired
-- **network_cost** - Money spent on marketing
-- **clicks, impressions** - Marketing ad performance
-
-*Engagement Metrics:*
-- **daus** - Daily Active Users (how many opened app today)
-- **sessions** - Total app opens
-- **session_length** - How long users stay in app
-
-*Retention Metrics (Cohort-Based):*
-- **retained_users** - How many users from install cohort came back on Day 1, 7, 30
-- **retention_rate** - Percentage of cohort still active
-- **events** - Custom in-app actions (level completed, purchase made, etc.)
-
-*Revenue Metrics:*
-- **ad_revenue** - Should match AdMob data (validation check)
-- **ad_impressions** - Should match AdMob
-- **iap_revenue** - In-app purchase revenue (if applicable)
-
-**Business Value:**
-
-- **Cost Per Install (CPI):** network_cost divided by installs - tells you if Country A is cheaper to acquire users than Country B
-- **User Quality:** Do expensive users (high CPI) actually generate more revenue? Or are cheap users better?
-- **Retention Rates:** If only 10% of users come back on Day 7, you have a retention problem
-- **Lifetime Value:** Track same cohort over 30 days to see total revenue per user
-- **Campaign Attribution:** Which marketing campaign brings highest-quality users?
-
-### Data Volume Estimates
-
-**AdMob API Volume Calculation:**
-
-Assuming you have:
-- 10 active apps
-- Average 15 countries per app (some apps global, some regional)
-- 2 platforms (iOS, Android)
-- 24 hours per day (for real-time)
-- 5 ad formats
-- 3 ad units per app on average
-
-Theoretical maximum rows per day:
-`10 apps × 15 countries × 2 platforms × 24 hours × 5 formats × 3 ad units = 108,000 rows/day`
-
-**Reality check:** Not all combinations exist:
-- Some apps not launched in all countries
-- Some ad formats not used in all apps
-- Many hours have zero impressions (especially overnight)
-
-**Realistic estimate:** 20,000 to 40,000 rows per day
-
-Over 90 days historical load: **1.8 to 3.6 million rows**
-
-**Adjust API Volume Calculation:**
-
-Simpler structure (no hourly breakdown, no ad unit dimension):
-- 10 apps × 15 countries × 2 platforms = 300 rows per day (deliverables endpoint)
-
-Cohort data (each install cohort tracked for 30 days):
-- 300 install combinations per day × 30 cohort maturity days = 9,000 cohort rows per day
-
-**Total Adjust:** Approximately 10,000 rows per day
-
-Over 90 days: **900,000 rows**
-
-**Combined Total Data Volume:**
-- **90-day historical load:** 4 to 5 million rows
-- **Daily incremental:** 50,000 new rows per day
-- **Storage estimate:** 2-3 GB raw CSV, 500 MB in Snowflake (compressed), 200 MB in PostgreSQL (30 days)
-
-**Is This Manageable?**
-Yes. This is considered SMALL by industry standards. Snowflake and PostgreSQL handle millions of rows easily. Query performance will be excellent with proper indexing and partitioning.
+**Conclusion:** Volumes are SMALL by industry standards, easily manageable
 
 ---
-
-## Validation Roadmap
-
-Before building anything, we must validate assumptions. Shit hits the fan when you build for data you can't actually get.
-
-### Phase 0: "Can We Actually Get The Fucking Data?"
-
-**Critical Questions to Answer:**
-
-1. Are the dimensions and metrics we want actually available from the APIs?
-2. Can we combine certain dimensions together, or do APIs have limitations?
-3. What are the API rate limits? Will we hit them?
-4. How far back can we fetch historical data?
-5. Is the data quality good enough to make business decisions?
-
-**Validation Step 1: API Capability Testing**
-
-Test with your existing API client to verify what's actually available:
-
-**AdMob Tests:**
-- Can we fetch HOUR dimension? (Required for real-time)
-- Can we request multiple dimensions together (DATE + HOUR + APP + COUNTRY + FORMAT + AD_UNIT)?
-- What's the maximum date range per API call? 30 days? 90 days?
-- Do all metrics work with all dimension combinations?
-- Are there undocumented restrictions?
-
-**Adjust Tests:**
-- Can we access cohort endpoints (retention data by D0, D1, D7, D30)?
-- Can we get session-level data (session length, sessions per user)?
-- Can we get campaign attribution data (tracker name, creative name)?
-- Can we get revenue broken down by cohort day?
-- What's the oldest data available? 90 days? 180 days?
-
-**Rate Limit Testing:**
-- How many API requests can we make per hour?
-- If we have 10 apps and need hourly data, do we hit limits?
-- Do we need to implement request throttling?
-
-**Expected Outcome:**
-- Document exactly which dimensions and metrics ARE available
-- Document what's NOT available (so we don't plan for impossible things)
-- Understand API constraints and plan around them
-
-**Validation Step 2: Data Volume Reality Check**
-
-Fetch one day of actual data and count the rows:
-
-Example: Fetch yesterday's AdMob data with all dimensions:
-- Actual rows returned: 35,000 rows
-- Multiply by 90 days: 3.15 million rows (confirmed our estimate)
-
-Fetch one day of Adjust data:
-- Actual rows: 8,500 rows
-- Multiply by 90 days: 765,000 rows (slightly less than estimate)
 
 **Why this matters:**
 - Confirms our storage and processing time estimates
@@ -957,50 +814,111 @@ Imagine a star with fact table in center, dimension tables radiating outward:
      dim_ad_format            dim_campaign
 ```
 
-### Fact Table 1: fact_revenue_daily
+### Fact Table 1: fact_acquisition_hourly (PostgreSQL - Real-Time)
 
-**Purpose:** Daily revenue and user metrics at the most detailed level
+**Source:** Adjust API (hourly granularity)
+
+**Purpose:** Real-time user acquisition tracking for operational decisions
+
+**Grain:** One row per app, per hour, per country, per platform
+
+**Storage:** PostgreSQL (last 14 days only)
+
+**Primary key:** acquisition_id
+
+**Foreign keys:**
+- app_id → dim_app
+- hour_id → dim_hour (timestamp: 2025-10-18T11:00:00)
+- country_id → dim_country
+- platform_id → dim_platform
+
+**Metrics:**
+- installs (hourly new users)
+- daus (daily active users - same for all hours in a day)
+- ad_revenue (hourly ad revenue from Adjust SDK)
+- ad_impressions (hourly impressions)
+- network_cost (hourly marketing spend)
+- ad_revenue_d0 (cumulative Day 0 revenue for installs in this hour)
+- ad_impressions_d0 (cumulative Day 0 impressions)
+
+**Use Cases:**
+- Real-time campaign monitoring
+- Peak hour analysis (when do best users install?)
+- Immediate ROI calculation (network_cost vs ad_revenue_d0)
+- Hourly arbitrage opportunities
+
+### Fact Table 2: fact_revenue_daily (Snowflake - Historical)
+
+**Source:** AdMob API (daily granularity)
+
+**Purpose:** Complete ad revenue analysis with full detail
 
 **Grain:** One row per app, per date, per country, per platform, per ad_format, per ad_unit
 
-**Primary key:** revenue_id (surrogate key generated from dimension combination)
+**Storage:** Snowflake (all history)
 
-**Foreign keys (links to dimensions):**
+**Primary key:** revenue_id
+
+**Foreign keys:**
 - app_id → dim_app
 - date_id → dim_date
 - country_id → dim_country
 - platform_id → dim_platform
 - ad_format_id → dim_ad_format
 - ad_unit_id → dim_ad_unit
-- campaign_id → dim_campaign (nullable for organic users)
 
-**Metrics (Measurements):**
-
-Revenue metrics:
-- revenue (from AdMob)
+**Metrics (from AdMob):**
+- estimated_earnings (revenue in USD)
 - impressions
 - clicks
-- ecpm
-- rpm (calculated)
+- ad_requests
+- matched_requests
+- observed_ecpm
 
-User acquisition metrics:
+**Calculated:**
+- click_through_rate = clicks / impressions
+- match_rate = matched_requests / ad_requests
+
+**Use Cases:**
+- Ad format performance analysis
+- Ad unit optimization
+- Platform comparison (iOS vs Android revenue)
+- Country revenue breakdown
+
+### Fact Table 3: fact_acquisition_daily (Snowflake - Historical)
+
+**Source:** Adjust API aggregated from hourly
+
+**Purpose:** User acquisition metrics matched with AdMob revenue
+
+**Grain:** One row per app, per date, per country, per platform
+
+**Storage:** Snowflake (all history)
+
+**Primary key:** acquisition_daily_id
+
+**Foreign keys:**
+- app_id → dim_app
+- date_id → dim_date
+- country_id → dim_country
+- platform_id → dim_platform
+
+**Metrics:**
 - installs
-- marketing_cost
-- cost_per_install (calculated)
-
-Engagement metrics:
 - daus
-- sessions
-- session_length
+- ad_revenue (Adjust SDK - for reconciliation with AdMob)
+- ad_impressions (Adjust SDK)
+- network_cost
+- network_cost_diff
 
-Calculated business metrics:
-- revenue_per_user
-- roi (revenue - marketing_cost)
-- engagement_ratio (daus / installs)
+**Calculated:**
+- cost_per_install = network_cost / installs
+- revenue_per_user = ad_revenue / daus
 
-Metadata:
-- loaded_at (when row was created)
-- updated_at (when row was last modified)
+**Use Cases:**
+- LTV:CAC ratio analysis
+- Marketing ROI calculations
+- Data reconciliation (Adjust vs AdMob revenue)
 
 **Example row:**
 ```
@@ -1033,11 +951,15 @@ WHERE d.year = 2025 AND d.month = 1
 GROUP BY a.app_name
 ```
 
-### Fact Table 2: fact_cohort_retention
+### Fact Table 4: fact_cohort_retention (Snowflake - Historical)
+
+**Source:** Adjust API cohort metrics
 
 **Purpose:** Track user cohorts over time to measure retention and lifetime value
 
 **Grain:** One row per install cohort, per cohort_day (D0, D1, D7, D30)
+
+**Storage:** Snowflake (all history)
 
 **Primary key:** cohort_id
 
@@ -1046,54 +968,49 @@ GROUP BY a.app_name
 - cohort_date_id → dim_date (the date users installed)
 - country_id → dim_country
 - platform_id → dim_platform
-- campaign_id → dim_campaign
 
 **Dimensions:**
 - cohort_maturity (D0, D1, D7, D30 - days since install)
 
-**Metrics:**
+**Metrics (from Adjust):**
+- cohort_size_d0 (total installs in cohort)
+- cohort_size_d1 (users retained on Day 1)
+- cohort_size_d7 (users retained on Day 7)
+- cohort_size_d30 (users retained on Day 30)
 
-Cohort size:
-- cohort_size (total installs in this cohort)
+**Calculated:**
+- retention_rate_d1 = cohort_size_d1 / cohort_size_d0
+- retention_rate_d7 = cohort_size_d7 / cohort_size_d0
+- retention_rate_d30 = cohort_size_d30 / cohort_size_d0
 
-Retention:
-- retained_users (how many still active)
-- retention_rate (retained / cohort_size)
-
-Revenue:
-- cumulative_revenue (total revenue from this cohort through cohort_day)
-- revenue_per_user (cumulative_revenue / cohort_size)
-
-Engagement:
-- active_sessions
-- avg_session_length
+**Use Cases:**
+- Long-term user retention analysis
+- Country/platform retention comparison
+- LTV forecasting (combine with revenue data)
+- Product improvement validation (did feature increase retention?)
 
 **Example row:**
 ```
 cohort_id: 67890
-app_id: 5
-cohort_date_id: 20250110 (users who installed on Jan 10)
+app_id: 5 (AI Video Generator)
+cohort_date_id: 20250110 (Jan 10, 2025 install cohort)
 country_id: 10 (UAE)
 platform_id: 1 (Android)
-campaign_id: 105
-cohort_maturity: "D7" (7 days after install)
-cohort_size: 250 (250 users installed on Jan 10)
-retained_users: 45 (45 still active on Day 7)
-retention_rate: 0.18 (18% retention)
-cumulative_revenue: 125.50 (total revenue from this cohort through D7)
-revenue_per_user: 0.50 (LTV at D7 = $0.50 per user)
+cohort_maturity: "D7"
+cohort_size_d0: 250 (installs)
+cohort_size_d7: 45 (still active on Day 7)
+retention_rate_d7: 0.18 (18% retained)
 ```
 
-**Query example:**
-"What's the Day 7 retention rate for users from Facebook campaigns?"
+**Query:** "Which countries have best Day 7 retention?"
 ```sql
 SELECT
-  c.campaign_name,
-  AVG(f.retention_rate) as avg_d7_retention
+  c.country_name,
+  AVG(f.retention_rate_d7) as avg_retention
 FROM fact_cohort_retention f
-JOIN dim_campaign c ON f.campaign_id = c.campaign_id
-WHERE f.cohort_maturity = 'D7'
-GROUP BY c.campaign_name
+JOIN dim_country c ON f.country_id = c.country_id
+GROUP BY c.country_name
+ORDER BY avg_retention DESC
 ```
 
 ### Dimension Table: dim_app
@@ -1827,6 +1744,32 @@ Success = Pass mid-course test (70+ pts) AND deliver real business value to your
 
 ---
 
-**Last Updated:** October 19, 2025
-**Status:** Planning Phase - Ready for Validation
-**Next Action:** Begin Week 1 API capability testing
+## Revision Summary (Oct 19, 2025)
+
+✅ **API Validation Complete** - Updated with actual tested capabilities
+
+**Key Changes:**
+1. **Architecture:** Real-time hourly pipeline confirmed viable (Adjust API)
+2. **Data Volumes:** Updated with actual test results (13.5K AdMob rows/day, 936 Adjust hourly rows/day)
+3. **Dimensional Model:** Added `fact_acquisition_hourly` for real-time PostgreSQL pipeline
+4. **Fact Tables:** 4 tables total (1 hourly real-time + 3 daily historical)
+5. **Limitations:** HOUR dimension NOT available in AdMob, IAP revenue NOT tracked
+
+**What Changed:**
+- Original plan: Assumed hourly for both sources
+- Validated reality: Hourly only from Adjust, daily from AdMob
+- Architecture impact: PostgreSQL for Adjust hourly + Snowflake for both daily
+
+**What Stayed:**
+- Hot/cold storage strategy
+- Star schema dimensional modeling
+- 3-layer dbt transformation (staging → intermediate → mart)
+- Business metrics focus (LTV, CAC, ROI, retention)
+
+**Ready For:** Implementation Phase
+
+---
+
+**Last Updated:** October 19, 2025 (Revised with API validation results)
+**Status:** ✅ Planning Complete - Ready for Implementation
+**Next Action:** Design dbt project structure and begin staging models

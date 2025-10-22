@@ -23,7 +23,7 @@ import requests
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv(dotenv_path=".secret/.env")
 
 
 class APICapabilityTester:
@@ -34,14 +34,10 @@ class APICapabilityTester:
         self.admob_publisher_ids = [
             "pub-3717786786472633",
             "pub-4109716399396805",
-            "pub-4738062221647171"
+            "pub-4738062221647171",
         ]
         self.adjust_token = os.getenv("ADJUST_TOKEN", "")
-        self.results = {
-            "admob": {},
-            "adjust": {},
-            "summary": {}
-        }
+        self.results = {"admob": {}, "adjust": {}, "summary": {}}
 
     def authenticate_admob(self, publisher_id):
         """Authenticate with AdMob using existing pickle tokens"""
@@ -68,9 +64,9 @@ class APICapabilityTester:
 
     def test_admob_dimensions(self):
         """Test different AdMob dimension combinations"""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("TESTING ADMOB API CAPABILITIES")
-        print("="*60)
+        print("=" * 60)
 
         publisher_id = self.admob_publisher_ids[0]  # Use first publisher
         service = self.authenticate_admob(publisher_id)
@@ -86,28 +82,35 @@ class APICapabilityTester:
             {
                 "name": "Basic (Current)",
                 "dimensions": ["APP", "DATE", "COUNTRY", "PLATFORM"],
-                "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS"]
+                "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS"],
             },
             {
                 "name": "With Hour (Real-time) - Network Report",
                 "dimensions": ["DATE", "HOUR", "APP", "COUNTRY", "PLATFORM"],
                 "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS"],
-                "use_network_report": True  # Use networkReport instead of mediationReport
+                "use_network_report": True,  # Use networkReport instead of mediationReport
             },
             {
                 "name": "With Ad Format",
                 "dimensions": ["APP", "DATE", "COUNTRY", "PLATFORM", "FORMAT"],
-                "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS"]
+                "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS"],
             },
             {
                 "name": "With Ad Unit",
                 "dimensions": ["APP", "DATE", "COUNTRY", "PLATFORM", "AD_UNIT"],
-                "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS"]
+                "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS"],
             },
             {
                 "name": "Complete (Format + Unit)",
-                "dimensions": ["APP", "DATE", "COUNTRY", "PLATFORM", "FORMAT", "AD_UNIT"],
-                "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS"]
+                "dimensions": [
+                    "APP",
+                    "DATE",
+                    "COUNTRY",
+                    "PLATFORM",
+                    "FORMAT",
+                    "AD_UNIT",
+                ],
+                "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS"],
             },
             {
                 "name": "Extended Metrics",
@@ -118,9 +121,9 @@ class APICapabilityTester:
                     "CLICKS",
                     "AD_REQUESTS",
                     "MATCHED_REQUESTS",
-                    "OBSERVED_ECPM"
-                ]
-            }
+                    "OBSERVED_ECPM",
+                ],
+            },
         ]
 
         for test in test_cases:
@@ -135,16 +138,16 @@ class APICapabilityTester:
                         "start_date": {
                             "year": date_obj.year,
                             "month": date_obj.month,
-                            "day": date_obj.day
+                            "day": date_obj.day,
                         },
                         "end_date": {
                             "year": date_obj.year,
                             "month": date_obj.month,
-                            "day": date_obj.day
-                        }
+                            "day": date_obj.day,
+                        },
                     },
                     "dimensions": test["dimensions"],
-                    "metrics": test["metrics"]
+                    "metrics": test["metrics"],
                 }
 
                 # Use Network Report API for HOUR dimension, Mediation Report for others
@@ -154,7 +157,7 @@ class APICapabilityTester:
                         .networkReport()
                         .generate(
                             parent=f"accounts/{publisher_id}",
-                            body={"report_spec": report_spec}
+                            body={"report_spec": report_spec},
                         )
                         .execute()
                     )
@@ -164,7 +167,7 @@ class APICapabilityTester:
                         .mediationReport()
                         .generate(
                             parent=f"accounts/{publisher_id}",
-                            body={"report_spec": report_spec}
+                            body={"report_spec": report_spec},
                         )
                         .execute()
                     )
@@ -186,7 +189,7 @@ class APICapabilityTester:
                     "dimensions": test["dimensions"],
                     "metrics": test["metrics"],
                     "row_count": row_count,
-                    "date_tested": yesterday
+                    "date_tested": yesterday,
                 }
 
             except Exception as e:
@@ -194,14 +197,14 @@ class APICapabilityTester:
                 print(f"   ❌ FAILED - {error_msg[:100]}")
                 self.results["admob"][test["name"]] = {
                     "status": "failed",
-                    "error": error_msg
+                    "error": error_msg,
                 }
 
     def test_admob_historical_depth(self):
         """Test how far back AdMob data is available"""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("TESTING ADMOB HISTORICAL DATA DEPTH")
-        print("="*60)
+        print("=" * 60)
 
         publisher_id = self.admob_publisher_ids[0]
         service = self.authenticate_admob(publisher_id)
@@ -213,7 +216,9 @@ class APICapabilityTester:
         test_ranges = [30, 60, 90, 180, 365]
 
         for days_back in test_ranges:
-            test_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+            test_date = (datetime.now() - timedelta(days=days_back)).strftime(
+                "%Y-%m-%d"
+            )
             print(f"\n📅 Testing {days_back} days back ({test_date})")
 
             try:
@@ -223,16 +228,16 @@ class APICapabilityTester:
                         "start_date": {
                             "year": date_obj.year,
                             "month": date_obj.month,
-                            "day": date_obj.day
+                            "day": date_obj.day,
                         },
                         "end_date": {
                             "year": date_obj.year,
                             "month": date_obj.month,
-                            "day": date_obj.day
-                        }
+                            "day": date_obj.day,
+                        },
                     },
                     "dimensions": ["APP", "DATE"],
-                    "metrics": ["ESTIMATED_EARNINGS"]
+                    "metrics": ["ESTIMATED_EARNINGS"],
                 }
 
                 response = (
@@ -240,7 +245,7 @@ class APICapabilityTester:
                     .mediationReport()
                     .generate(
                         parent=f"accounts/{publisher_id}",
-                        body={"report_spec": report_spec}
+                        body={"report_spec": report_spec},
                     )
                     .execute()
                 )
@@ -262,9 +267,9 @@ class APICapabilityTester:
 
     def test_adjust_endpoints(self):
         """Test Adjust API endpoints and available data"""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("TESTING ADJUST API CAPABILITIES")
-        print("="*60)
+        print("=" * 60)
 
         if not self.adjust_token:
             print("❌ ADJUST_TOKEN not found in environment")
@@ -274,7 +279,7 @@ class APICapabilityTester:
         # For now, just test if we can authenticate
         headers = {
             "Authorization": f"Bearer {self.adjust_token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         # Test deliverables endpoint (basic metrics)
@@ -291,9 +296,9 @@ class APICapabilityTester:
 
     def print_summary(self):
         """Print summary of findings"""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("VALIDATION SUMMARY")
-        print("="*60)
+        print("=" * 60)
 
         print("\n✅ ADMOB WORKING CONFIGURATIONS:")
         for name, result in self.results["admob"].items():
@@ -309,7 +314,9 @@ class APICapabilityTester:
 
         print("\n📋 RECOMMENDED CONFIGURATION FOR PROJECT:")
         # Find the config with most dimensions that worked
-        successful = [r for r in self.results["admob"].values() if r.get("status") == "success"]
+        successful = [
+            r for r in self.results["admob"].values() if r.get("status") == "success"
+        ]
         if successful:
             best = max(successful, key=lambda x: len(x.get("dimensions", [])))
             print(f"   Dimensions: {', '.join(best['dimensions'])}")
@@ -319,10 +326,10 @@ class APICapabilityTester:
 
     def run_all_tests(self):
         """Run all validation tests"""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("API CAPABILITY VALIDATION")
         print("Testing what data we can actually get from APIs")
-        print("="*60)
+        print("=" * 60)
 
         try:
             self.test_admob_dimensions()

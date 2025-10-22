@@ -15,7 +15,7 @@ import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(dotenv_path=".secret/.env")
 
 
 class AdjustCapabilityTester:
@@ -73,8 +73,14 @@ class AdjustCapabilityTester:
         dimension_tests = [
             {"name": "Basic (app only)", "dimensions": "app"},
             {"name": "App + Date", "dimensions": "app,day"},
-            {"name": "App + Date + Country", "dimensions": "app,day,country_code,country"},
-            {"name": "App + Date + Country + OS", "dimensions": "app,day,country_code,country,os_name"},
+            {
+                "name": "App + Date + Country",
+                "dimensions": "app,day,country_code,country",
+            },
+            {
+                "name": "App + Date + Country + OS",
+                "dimensions": "app,day,country_code,country,os_name",
+            },
             {
                 "name": "Full (with store_id)",
                 "dimensions": "app,store_id,day,country_code,country,os_name",
@@ -195,7 +201,9 @@ class AdjustCapabilityTester:
         test_ranges = [7, 30, 60, 90, 180, 365]
 
         for days_back in test_ranges:
-            test_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+            test_date = (datetime.now() - timedelta(days=days_back)).strftime(
+                "%Y-%m-%d"
+            )
             print(f"\n📅 Testing {days_back} days back ({test_date})")
 
             params = {

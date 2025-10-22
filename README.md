@@ -11,8 +11,12 @@
 - **AdMob API:** Ad revenue, impressions, ad format performance (daily granularity)
 - **Adjust API:** User acquisition, cohort retention, marketing costs (hourly + daily)
 
+**Data Pipelines:**
+- **Real-Time Pipeline:** Adjust API (hourly) → PostgreSQL Docker → 39 rows/hour row-by-row ingestion
+- **Batch Pipeline:** AdMob API (daily) → Snowflake → 13,500+ rows/batch (27x test requirement)
+
 **Architecture:**
-- **Hot Storage (PostgreSQL):** Adjust hourly data (last 14 days) for real-time dashboards
+- **Hot Storage (PostgreSQL):** Adjust hourly data (last 14 days) for operational dashboards
 - **Cold Storage (Snowflake):** Both sources daily (all history) for strategic analysis
 
 **Business Value:**
@@ -24,11 +28,18 @@
 
 ## Current Status
 
-✅ **Planning Complete:**
-- API validation finished (see `docs/planning/api_validation_results.md`)
-- Data strategy finalized (see `docs/planning/data_strategy.md`)
+✅ **Planning & Validation Complete:**
+- API validation finished with actual data volumes confirmed
+- Architecture validated against mid-course test requirements
+- Batch/real-time pipelines mapped to test criteria (see below)
 - Dimensional model designed (4 fact tables, 7+ dimension tables)
 - Confirmed data volumes: 5.7M rows/year (manageable)
+
+**Test Alignment:**
+- Real-time: Adjust hourly (936 rows/day) meets row-by-row incremental requirement
+- Batch: AdMob daily (13,508 rows/batch) exceeds 500-row requirement by 27x
+- PostgreSQL: Docker containerization ready for demo
+- See [Test Requirements Mapping](./docs/planning/data_strategy.md#mid-course-test-requirements-mapping) for demo scripts
 
 **Ready For:** Implementation Phase
 
@@ -113,5 +124,5 @@ fa-c002-lab/
 
 ---
 
-**Last Updated:** October 19, 2025
-**Status:** ✅ Planning Complete - Ready for Implementation
+**Last Updated:** October 22, 2025
+**Status:** ✅ Planning Complete - Architecture Validated - Ready for Implementation

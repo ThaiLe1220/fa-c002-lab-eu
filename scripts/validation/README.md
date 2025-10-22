@@ -12,7 +12,7 @@
 
 ```bash
 # Run individual tests
-python scripts/validation/test_api_capabilities.py
+python scripts/validation/test _api_capabilities.py
 python scripts/validation/test_hour_dimension.py
 python scripts/validation/test_adjust_capabilities.py
 ```

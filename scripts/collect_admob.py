@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """
-AdMob Batch Data Collection Pipeline
+AdMob Daily Data Collection - Pure RAW Pipeline
 
-Fetches daily ad performance data from AdMob API and loads to Snowflake.
-
-Pattern: Following M01W03 lab structure for batch pipeline
-Volume: ~13,500 rows per day
-Demo: Load 7 days = 94,000 rows
+Fetches daily ad performance data from AdMob API and loads to Snowflake RAW table.
+NO TRANSFORMATIONS - stores exact API response (flattened).
 
 Usage:
     python scripts/collect_admob.py --days 7
@@ -29,7 +26,6 @@ from googleapiclient.discovery import build
 import pandas as pd
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import track
 from dotenv import load_dotenv
 
 from scripts.utils.snowflake_client import get_snowflake_client
@@ -64,7 +60,6 @@ def authenticate_admob(publisher_id: str):
         # Refresh if expired
         if credentials and credentials.expired and credentials.refresh_token:
             credentials.refresh(Request())
-            console.print(f"[cyan]✓ Refreshed credentials for {publisher_id}[/cyan]")
 
         service = build("admob", "v1", credentials=credentials)
         console.print(f"[green]✓ Authenticated: {publisher_id}[/green]")
@@ -74,14 +69,14 @@ def authenticate_admob(publisher_id: str):
         raise RuntimeError(f"AdMob authentication failed: {str(e)}")
 
 
-def fetch_admob_data(
+def fetch_admob_raw(
     service,
     publisher_id: str,
     start_date: str,
     end_date: str
 ) -> pd.DataFrame:
     """
-    Fetch AdMob data for date range.
+    Fetch raw AdMob data (exact API response, flattened).
 
     Args:
         service: AdMob API service
@@ -90,10 +85,11 @@ def fetch_admob_data(
         end_date: End date (YYYY-MM-DD)
 
     Returns:
-        pandas DataFrame with ad performance data
+        DataFrame with exact API fields (no transformations)
     """
 
-    # Build request (following validated API structure - snake_case)
+    console.print(f"[cyan]Fetching AdMob API: {start_date} to {end_date}[/cyan]")
+
     start_dt = datetime.strptime(start_date, "%Y-%m-%d")
     end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
@@ -125,7 +121,6 @@ def fetch_admob_data(
     }
 
     try:
-        # Execute API request
         response = (
             service.accounts()
             .mediationReport()
@@ -133,151 +128,162 @@ def fetch_admob_data(
             .execute()
         )
 
-        # Parse response (can be list or dict)
+        # Parse response - extract raw values (no transformations)
         rows = []
 
         if isinstance(response, list):
-            # Response is a list of row items
-            for item in response:
+            # Skip first item (header)
+            for item in response[1:]:
                 if "row" in item:
                     row = item["row"]
+                    dim = row.get("dimensionValues", {})
+                    met = row.get("metricValues", {})
 
-                    # Extract dimensions
-                    dim_values = row.get("dimensionValues", {})
-
-                    # Extract metrics
-                    metric_values = row.get("metricValues", {})
-
+                    # Extract raw values (keep as strings, no conversions)
                     rows.append({
-                        "date": dim_values.get("DATE", {}).get("value"),
-                        "app_id": dim_values.get("APP", {}).get("displayLabel", ""),
-                        "country_code": dim_values.get("COUNTRY", {}).get("value", ""),
-                        "platform": dim_values.get("PLATFORM", {}).get("value", ""),
-                        "ad_format": dim_values.get("FORMAT", {}).get("value", ""),
-                        "ad_unit_id": dim_values.get("AD_UNIT", {}).get("displayLabel", ""),
-                        "ad_impressions": int(metric_values.get("IMPRESSIONS", {}).get("integerValue", 0)),
-                        "ad_clicks": int(metric_values.get("CLICKS", {}).get("integerValue", 0)),
-                        "ad_requests": int(metric_values.get("AD_REQUESTS", {}).get("integerValue", 0)),
-                        "matched_requests": int(metric_values.get("MATCHED_REQUESTS", {}).get("integerValue", 0)),
-                        "estimated_earnings": float(metric_values.get("ESTIMATED_EARNINGS", {}).get("microsValue", 0)) / 1_000_000,
-                        "observed_ecpm": float(metric_values.get("OBSERVED_ECPM", {}).get("microsValue", 0)) / 1_000_000,
-                    })
-        else:
-            # Response is a dict with 'row' key
-            if "row" in response:
-                for row in response["row"]:
-                    # Extract dimensions
-                    dim_values = row.get("dimensionValues", {})
-
-                    # Extract metrics
-                    metric_values = row.get("metricValues", {})
-
-                    rows.append({
-                        "date": dim_values.get("DATE", {}).get("value"),
-                        "app_id": dim_values.get("APP", {}).get("displayLabel", ""),
-                        "country_code": dim_values.get("COUNTRY", {}).get("value", ""),
-                        "platform": dim_values.get("PLATFORM", {}).get("value", ""),
-                        "ad_format": dim_values.get("FORMAT", {}).get("value", ""),
-                        "ad_unit_id": dim_values.get("AD_UNIT", {}).get("displayLabel", ""),
-                        "ad_impressions": int(metric_values.get("IMPRESSIONS", {}).get("integerValue", 0)),
-                        "ad_clicks": int(metric_values.get("CLICKS", {}).get("integerValue", 0)),
-                        "ad_requests": int(metric_values.get("AD_REQUESTS", {}).get("integerValue", 0)),
-                        "matched_requests": int(metric_values.get("MATCHED_REQUESTS", {}).get("integerValue", 0)),
-                        "estimated_earnings": float(metric_values.get("ESTIMATED_EARNINGS", {}).get("microsValue", 0)) / 1_000_000,
-                        "observed_ecpm": float(metric_values.get("OBSERVED_ECPM", {}).get("microsValue", 0)) / 1_000_000,
+                        "date": dim.get("DATE", {}).get("value"),
+                        "app_id": dim.get("APP", {}).get("displayLabel"),
+                        "country_code": dim.get("COUNTRY", {}).get("value"),
+                        "platform": dim.get("PLATFORM", {}).get("value"),
+                        "ad_format": dim.get("FORMAT", {}).get("value"),
+                        "ad_unit_id": dim.get("AD_UNIT", {}).get("displayLabel"),
+                        "ad_impressions": met.get("IMPRESSIONS", {}).get("integerValue"),
+                        "ad_clicks": met.get("CLICKS", {}).get("integerValue"),
+                        "ad_requests": met.get("AD_REQUESTS", {}).get("integerValue"),
+                        "matched_requests": met.get("MATCHED_REQUESTS", {}).get("integerValue"),
+                        "estimated_earnings": met.get("ESTIMATED_EARNINGS", {}).get("microsValue"),
+                        "observed_ecpm": met.get("OBSERVED_ECPM", {}).get("microsValue"),
                     })
 
         df = pd.DataFrame(rows)
 
         if not df.empty:
-            # Convert date column to proper format (DATE only, not timestamp)
-            df['date'] = pd.to_datetime(df['date']).dt.date
-
             # Add metadata
-            df['loaded_at'] = pd.Timestamp.now()
-            df['batch_id'] = f"{start_date}_{end_date}"
+            df["loaded_at"] = datetime.now()
+            df["batch_id"] = f"{start_date}_{end_date}"
 
-            # Rename columns to match Snowflake table schema (uppercase)
+            # Convert column names to UPPERCASE (Snowflake convention)
             df.columns = df.columns.str.upper()
+
+        console.print(f"[green]✓ Fetched {len(df):,} rows[/green]")
 
         return df
 
     except Exception as e:
-        raise RuntimeError(f"API request failed: {str(e)}")
+        console.print(f"[red]✗ API error: {e}[/red]")
+        return pd.DataFrame()
+
+
+def load_to_snowflake(df: pd.DataFrame):
+    """
+    Load raw DataFrame to Snowflake (exact copy, no transformations).
+
+    Args:
+        df: DataFrame with API columns
+    """
+
+    if df.empty:
+        console.print("[yellow]⚠ No data to load[/yellow]")
+        return
+
+    client = get_snowflake_client()
+
+    try:
+        conn = client.connect()
+
+        console.print(f"[cyan]Loading {len(df):,} rows to RAW.ADMOB_DAILY...[/cyan]")
+
+        # Write directly to Snowflake using pandas
+        from snowflake.connector.pandas_tools import write_pandas
+
+        success, nchunks, nrows, _ = write_pandas(
+            conn=conn,
+            df=df,
+            table_name="ADMOB_DAILY",
+            database="DB_T34",
+            schema="RAW",
+            auto_create_table=False,
+            overwrite=False
+        )
+
+        if success:
+            console.print(f"[green]✓ Loaded {nrows:,} rows to RAW.ADMOB_DAILY[/green]")
+        else:
+            console.print(f"[red]✗ Load failed[/red]")
+
+    except Exception as e:
+        console.print(f"[red]✗ Snowflake error: {e}[/red]")
+        raise
+
+    finally:
+        client.close()
 
 
 def main():
-    """Main execution: Fetch AdMob data and load to Snowflake."""
+    """Main pipeline execution."""
 
-    parser = argparse.ArgumentParser(description='Collect AdMob batch data')
-    parser.add_argument('--days', type=int, default=7, help='Number of days to fetch (default: 7)')
-    parser.add_argument('--publisher', type=str, default='pub-4738062221647171', help='Publisher ID')
+    parser = argparse.ArgumentParser(description="AdMob Daily RAW Data Collection")
+    parser.add_argument("--days", type=int, default=7, help="Number of days to fetch (default: 7)")
+    parser.add_argument("--publisher", type=str, default="pub-4738062221647171", help="Publisher ID")
     args = parser.parse_args()
 
     console.print(Panel.fit(
-        f"[bold cyan]AdMob Batch Data Collection[/bold cyan]\n"
-        f"Publisher: {args.publisher}\n"
-        f"Days: {args.days}\n"
-        f"Target: Snowflake RAW.ADMOB_DAILY",
-        title="Pipeline Start"
+        "[bold cyan]AdMob RAW Pipeline[/bold cyan]\n"
+        f"Fetching last {args.days} day(s)\n"
+        "Mode: Pure RAW (no transformations)",
+        title="Data Collection"
     ))
 
     try:
         # Authenticate
-        console.print("\n[cyan]Step 1: Authenticating...[/cyan]")
+        console.print("\n[bold]Step 1: Authenticate[/bold]")
         service = authenticate_admob(args.publisher)
 
-        # Fetch data for each day (start from 3 days ago to allow for AdMob data finalization)
-        console.print(f"\n[cyan]Step 2: Fetching {args.days} days of data...[/cyan]")
+        # Fetch data (start from 3 days ago - AdMob data finalization delay)
+        console.print("\n[bold]Step 2: Fetch from AdMob API[/bold]")
 
         all_data = []
-        start_offset = 3  # Start from 3 days ago
-        for i in track(range(args.days), description="Fetching batches"):
-            target_date = (datetime.now() - timedelta(days=i+start_offset)).strftime("%Y-%m-%d")
+        start_offset = 3
 
-            df = fetch_admob_data(
-                service,
-                args.publisher,
-                target_date,
-                target_date
-            )
+        for i in range(args.days):
+            target_date = (datetime.now() - timedelta(days=i+start_offset)).date()
+            date_str = target_date.strftime("%Y-%m-%d")
+
+            df = fetch_admob_raw(service, args.publisher, date_str, date_str)
 
             if not df.empty:
                 all_data.append(df)
-                console.print(f"  ✓ {target_date}: {len(df):,} rows")
+                console.print(f"  ✓ {date_str}: {len(df):,} rows")
             else:
-                console.print(f"  ⚠ {target_date}: No data")
+                console.print(f"  ⚠ {date_str}: No data")
 
         if not all_data:
             console.print("[yellow]⚠ No data fetched[/yellow]")
-            return 1
+            return 0
 
         # Combine all batches
         combined_df = pd.concat(all_data, ignore_index=True)
-        console.print(f"\n[green]✓ Total rows fetched: {len(combined_df):,}[/green]")
+        console.print(f"\n[green]✓ Total rows: {len(combined_df):,}[/green]")
 
-        # Load to Snowflake
-        console.print("\n[cyan]Step 3: Loading to Snowflake...[/cyan]")
+        # Load to Snowflake (no transformations)
+        console.print("\n[bold]Step 3: Load to Snowflake RAW[/bold]")
+        load_to_snowflake(combined_df)
 
-        with get_snowflake_client() as sf:
-            rows_loaded = sf.load_dataframe(
-                df=combined_df,
-                table_name='ADMOB_DAILY'
-            )
-
+        # Success
         console.print(Panel.fit(
             f"[bold green]✓ Pipeline Complete[/bold green]\n"
-            f"Rows loaded: {rows_loaded:,}\n"
-            f"Table: RAW.ADMOB_DAILY",
+            f"Days: {args.days}\n"
+            f"Rows Loaded: {len(combined_df):,}\n"
+            f"Loaded At: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             title="Success"
         ))
 
         return 0
 
     except Exception as e:
-        console.print(f"\n[bold red]Error: {str(e)}[/bold red]")
+        console.print(f"\n[bold red]✗ Pipeline failed: {e}[/bold red]")
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

@@ -628,6 +628,78 @@ Snowflake only → Revenue analysis
 
 ---
 
+## Data Collection Orchestration Strategy
+
+**Decision Date:** October 27, 2025
+
+### Orchestration Approach: GitHub Actions Scheduled Workflows
+
+**Selected Solution:**
+```yaml
+# .github/workflows/data_collection.yml
+on:
+  schedule:
+    - cron: '0 2 * * *'    # AdMob daily at 2 AM UTC
+    - cron: '0 * * * *'    # Adjust hourly
+  workflow_dispatch:        # Manual trigger for demo/testing
+```
+
+**Why GitHub Actions:**
+1. **Already in stack** - CI/CD requirement for test (5 pts)
+2. **Zero additional infrastructure** - No servers to manage
+3. **Free** - Included in GitHub free tier
+4. **Easy to demonstrate** - Show workflow runs during test
+5. **Industry-standard** - Used by many production data pipelines
+
+**Execution Pattern:**
+- **AdMob Pipeline:** Runs daily at 2 AM UTC
+  - Fetches previous day's data (13,500+ rows)
+  - Loads to Snowflake RAW.ADMOB_DAILY
+  - Execution time: ~2-3 minutes
+
+- **Adjust Pipeline:** Runs every hour on the hour
+  - Fetches previous hour's data (~39 rows)
+  - Loads to Snowflake RAW.ADJUST_HOURLY
+  - Execution time: ~1 minute
+
+- **dbt Transformations:** Runs after data collection
+  - Triggered by workflow completion
+  - Incremental models process only new data
+  - Execution time: ~5 minutes
+
+**Alternatives Considered:**
+
+| Solution | Pros | Cons | Decision |
+|----------|------|------|----------|
+| **Cron Jobs** | Simple, native Linux | Requires 24/7 server ($$$), no monitoring | ❌ Rejected |
+| **Apache Airflow** | Enterprise-grade, powerful | Overkill for 2 pipelines, complex setup | ❌ Rejected |
+| **dbt Cloud** | Built-in scheduler | Paid service, handles dbt only (not data collection) | ❌ Rejected |
+| **GitHub Actions** | Free, already in stack, easy demo | Execution time limits (6 hrs max) | ✅ Selected |
+
+**Mid-Course Test Strategy:**
+- **Manual execution acceptable** for demonstration
+- **Scheduled workflows = bonus points** (shows production thinking)
+- **Focus:** Pipeline correctness > automation complexity
+- **Demo approach:** Run scripts manually, explain scheduled workflow in documentation
+
+**Production Deployment Considerations:**
+- GitHub Actions limits: 2,000 minutes/month (free tier) = ~67 hours
+- Our usage: (1 min × 24 runs/day) + (3 min × 1 run/day) = ~30 min/day = 900 min/month
+- **Conclusion:** Well within free tier limits for production use
+
+**Monitoring & Alerting:**
+- GitHub Actions provides email notifications on workflow failures
+- Can integrate with Slack/Discord for real-time alerts
+- Workflow run history provides audit trail
+
+**Future Enhancements (Post-Test):**
+- Add retry logic for API failures
+- Implement exponential backoff for rate limiting
+- Add data quality checks before loading
+- Integrate with monitoring tools (DataDog, New Relic)
+
+---
+
 ## Mid-Course Test Requirements Mapping
 
 ### Real-Time Pipeline (Section 1: 20 points)
@@ -1549,9 +1621,11 @@ Purpose: Clean and standardize raw data from each source
 
 Models:
 - `stg_admob__daily_performance` - AdMob revenue data (daily grain)
+  - Convert date string `20251024` → DATE type
+  - Divide microsValues by 1,000,000 for `estimated_earnings`, `observed_ecpm`
+  - Cast string integers to INTEGER type
 - `stg_adjust__daily_metrics` - Adjust user acquisition data (daily grain)
-- Column renaming: `store_id` → `app_id`, `day` → `date`
-- Type casting: Strings → proper types (DATE, DECIMAL, INTEGER)
+  - Column renaming: `store_id` → `app_id`, `day` → `date`
 - Standardization: Country codes uppercase, nulls handled consistently
 - Deduplication: Remove duplicates based on natural keys
 

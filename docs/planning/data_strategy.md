@@ -2,19 +2,31 @@
 
 **Project Goal:** Build a production-grade data warehouse that delivers real business value to mobile app publishers while passing mid-course test requirements.
 
-**Status:** ✅ API Validation Complete (see `api_validation_results.md`)
+**Status:** ✅ API Validation Complete + Business Requirements Validated (Oct 22, 2025)
 
 **Success Criteria:**
-- Pass mid-course test (70+ points)
-- Provide actionable insights for mobile app business decisions
-- Handle real-world data volumes efficiently
+- Pass mid-course test (70+ points minimum, targeting 80+)
+- Replace manual Google Sheet workflow with automated data warehouse
+- Enable BOD/UA/DEV teams to make data-driven decisions on ROAS optimization
+- Provide daily operational metrics and weekly strategic analysis
 - Industry-standard architecture and practices
 
 **Key Findings from API Validation:**
-- AdMob: Daily granularity only, 13.5K rows/day
-- Adjust: **Hourly granularity available**, 936 rows/day
+- AdMob: Daily granularity only, 13.5K rows/day (SOURCE OF TRUTH for revenue)
+- Adjust: **Hourly granularity available**, 936 rows/day (attribution + network costs)
 - Cohort retention data available (D0, D1, D7, D30)
 - IAP revenue NOT tracked
+
+**Current State:**
+- Data stored in Google Sheets (last week of previous month + current month)
+- Manual exports from AdMob/Adjust APIs
+- Looker Studio for visualization
+- No automated quality checks or alerting
+
+**Mid-Course Test Alignment:**
+- ✅ **Real-Time Pipeline:** Adjust API (hourly) → PostgreSQL (Docker) → 936 rows/day
+- ✅ **Batch Pipeline:** AdMob API (daily) → Snowflake → 13,500+ rows/batch (>> 500 requirement)
+- ✅ **Architecture Justification:** Hot (operational) vs Cold (historical) storage for business needs
 
 ---
 
@@ -34,52 +46,220 @@
 
 ### The Real-World Business Context
 
-You run a mobile app publishing company with multiple apps generating revenue through in-app advertising. Every day, critical business decisions need answers:
+**Company Profile:**
+- Mobile app publisher specializing in entertainment and productivity apps
+- Primary revenue: In-app advertising (AdMob)
+- Business model: Free apps with ad-supported monetization
+- User behavior: High engagement on Day 0, high churn (typical for entertainment)
+- Critical focus: **Day 0 metrics** (ROAS_D0, eCPM, IMPDAU_D0, CPI)
 
-**Daily Operations:**
-- "How much money did we make yesterday?"
-- "Which app is performing best right now?"
-- "Should we pause this marketing campaign because it's losing money?"
+**Key Apps:**
+- AI GPT Generator-Text to Video (`ai.video.generator.text.video`)
+- Text to Video FLIX (`video.ai.videogenerator`)
+- ~10 total apps across entertainment/productivity
 
-**Strategic Planning:**
-- "Which country should we expand to next?"
-- "What's the return on investment for our marketing spend?"
-- "Should we invest more in App A or shut it down?"
+**The Business Reality:**
+```
+User Journey:
+Day 0: Install app → Use features → Watch ads → Generate revenue
+Day 1+: Either return (retention) → more revenue, OR delete app
+
+Economics:
+Spend money on user acquisition (Facebook/Google Ads)
+Users generate money by watching ads (AdMob impressions)
+Profit = Revenue generated - Acquisition cost
+```
 
 **Current Pain Points:**
-- Data scattered across CSV exports from different platforms
-- Manual analysis in spreadsheets (slow, error-prone)
-- No real-time visibility into revenue changes
-- Can't easily calculate user lifetime value or retention
-- Marketing team can't see if campaigns are profitable
+- Manual Google Sheet workflow (export → append → analyze)
+- No automated data quality checks (revenue mismatches go unnoticed)
+- Limited historical analysis (only ~30-60 days retained)
+- No alerting system (manual morning checks by UA team)
+- Slow query performance (Google Sheets not optimized for analytics)
+- Error-prone manual processes (copy-paste mistakes, schema drift)
 
-### The Core Business Metrics
+### The North Star Metric: ROAS (Return On Ad Spend)
 
-Understanding mobile app profitability requires tracking the complete user journey:
+**ROAS = Revenue Generated / Money Spent on Ads**
 
-**User Acquisition (The Cost Side):**
-- You spend money on ads to get users to install your app
-- **Cost Per Install (CPI)** = Marketing spend divided by number of installs
-- Different countries and campaigns have different costs
-
-**Monetization (The Revenue Side):**
-- Users see ads in your app, generating revenue
-- **Day 0 Revenue** = Money made on install day
-- **Lifetime Value (LTV)** = Total money a user generates over weeks/months
-- Revenue depends on user retention (do they come back?)
-
-**The Profitability Equation:**
 ```
-Profit Per User = Lifetime Value - Cost Per Install
-
-If LTV > CPI → Profitable, scale up marketing!
-If LTV < CPI → Losing money, fix monetization or stop marketing
+ROAS = 0.5 → Spent $100, got $50  → LOSING $50 (BAD!)
+ROAS = 1.0 → Spent $100, got $100 → Breaking even
+ROAS = 2.0 → Spent $100, got $200 → PROFIT $100 (GOOD!)
+ROAS = 5.0 → Spent $100, got $500 → JACKPOT!
 ```
 
-**The Critical Ratio: LTV:CAC (Lifetime Value to Customer Acquisition Cost)**
-- Greater than 3:1 → Healthy business, invest more
-- Between 1:1 and 3:1 → Profitable but tight margins
-- Less than 1:1 → Losing money on every user
+**Why ROAS is EVERYTHING:**
+1. Tells you if marketing is profitable
+2. Tells you which countries to invest in
+3. Tells you which apps are worth promoting
+4. Tells you when to STOP spending (if ROAS < 1.0)
+
+**Real Example from Data (Thailand, 2025-09-25):**
+```
+App: AI Video Generator
+network_cost = $1,406.09 (spent on user acquisition)
+ad_revenue_total_D0 = $1,309.73 (earned from ads on Day 0)
+
+ROAS_D0 = 1309.73 / 1406.09 = 0.93
+
+Business Decision:
+"We're losing $96 on Day 0. If D1+ retention doesn't recover this,
+ we should reduce or pause Thailand campaign."
+```
+
+### The Four Pillars of ROAS
+
+**VP/PO Business Logic: "ROAS depends on eCPM, IMPDAU_D0, and CPI"**
+
+#### 1. eCPM (Effective Cost Per Mille) = Revenue Efficiency
+
+```
+eCPM = (admob_rev × 1000) / admob_imp
+
+"How much money do we make per 1,000 ad impressions?"
+```
+
+**Real Example (Thailand):**
+```
+admob_rev = $1,513.03
+admob_imp = 67,679
+
+eCPM = (1513.03 × 1000) / 67679 = $22.36
+
+Interpretation: $22.36 per 1,000 impressions is EXCELLENT for entertainment
+(typical range: $5-15)
+```
+
+**Business Use:**
+- Compare across countries: India eCPM vs US eCPM
+- Compare across apps: Which app monetizes better?
+- Optimize ad placements: Which formats have highest eCPM?
+
+#### 2. IMPDAU_D0 (Impressions Per DAU on Day 0) = Engagement
+
+```
+IMPDAU_D0 = ad_impressions_total_D0 / daus
+
+"How many ads does each user watch on their first day?"
+```
+
+**Real Example (Thailand):**
+```
+ad_impressions_total_D0 = 57,559
+daus = 14,608
+
+IMPDAU_D0 = 57559 / 14608 = 3.94 impressions/user
+
+Interpretation: Users watch ~4 ads on Day 0 - healthy engagement
+```
+
+**Business Use:**
+- Product-market fit indicator (higher = better engagement)
+- Compare across countries: Which markets engage more?
+- Feature impact: Did new features increase/decrease IMPDAU?
+
+#### 3. CPI (Cost Per Install) = Acquisition Efficiency
+
+```
+CPI = network_cost / installs
+
+"How much does it cost to acquire one user?"
+
+Also: CPI = CPM × IPM / 1000
+Where:
+  CPM = (network_cost × 1000) / paid_impressions
+  IPM = (installs × 1000) / paid_impressions
+```
+
+**Real Example (Thailand):**
+```
+network_cost = $1,406.09
+installs = 12,514
+
+CPI = 1406.09 / 12514 = $0.112 (11.2 cents per install)
+
+Interpretation: Very low CPI - efficient user acquisition
+```
+
+**Business Use:**
+- Compare across countries: Where is acquisition cheapest?
+- Ad network optimization: Adjust bids to hit target CPI
+- Budget allocation: Invest more where CPI is low
+
+#### 4. The ROAS Formula (Putting It Together)
+
+```
+ROAS_D0 = ad_revenue_total_D0 / network_cost
+
+Mathematical relationship:
+ROAS = (eCPM × IMPDAU_D0) / (CPI × 1000)
+
+Intuition:
+  High eCPM + High IMPDAU + Low CPI = High ROAS ✅
+  Low eCPM + Low IMPDAU + High CPI = Low ROAS ❌
+```
+
+**Thailand Example Validation:**
+```
+eCPM = $22.36
+IMPDAU_D0 = 3.94
+CPI = $0.112
+
+Predicted ROAS = (22.36 × 3.94) / (0.112 × 1000) = 0.79
+Actual ROAS = 0.93
+
+(Close - small differences due to calculation timing)
+```
+
+### Critical: Revenue Reconciliation (Data Quality Foundation)
+
+**The Two Data Sources Problem:**
+
+**AdMob (Google) - SOURCE OF TRUTH for Revenue:**
+- Tracks ad impressions and actual revenue
+- Revenue = money that hits your bank account
+- Updated daily
+- Definitive source for financial reporting
+
+**Adjust (Attribution Platform) - ESTIMATES Revenue:**
+- Tracks user acquisition (installs, campaigns, DAUs)
+- SDK estimates revenue based on ad events
+- Has network_cost (actual marketing spend)
+- Revenue is calculated/estimated, not actual
+
+**Why Mismatches Happen:**
+1. **Timing differences**: AdMob reports when ad served, Adjust when user clicks
+2. **Attribution windows**: Adjust might attribute revenue to wrong date/user
+3. **SDK issues**: Adjust SDK might not fire correctly on all devices
+4. **Data pipeline delays**: Adjust processes data slower than AdMob
+
+**Real Example (Thailand, 2025-09-25):**
+```
+adjust_rev = $1,520.02
+admob_rev  = $1,513.03
+
+Difference = $7.00 (0.46% mismatch - ACCEPTABLE)
+
+Impact on ROAS calculation:
+Using Adjust: ROAS = 1520.02 / 1406.09 = 1.08 (looks profitable!)
+Using AdMob:  ROAS = 1513.03 / 1406.09 = 1.076 (slightly less profitable)
+
+Decision impact: Could over-invest if using wrong number
+```
+
+**UA Team Daily Workflow Need:**
+1. **Morning check**: Revenue reconciliation dashboard
+2. **Alert trigger**: When mismatch > 5%
+3. **Investigation**: Check which app/country has mismatch
+4. **Action**: Verify Adjust SDK, check attribution, re-sync data
+5. **Financial reporting**: Always use AdMob revenue (source of truth)
+
+**System Requirement:**
+- Automated daily comparison: adjust_rev vs admob_rev
+- Flag mismatches > 5% with app/country/date details
+- Historical tracking: Has this country/app had consistent mismatches?
+- Alert mechanism: Notify UA team immediately
 
 ### What Your Analytics Team Currently Tracks
 
@@ -104,11 +284,210 @@ Your existing analytics team focuses on these daily metrics:
 - Impression count matching between platforms
 
 **What's Missing (Your Opportunity):**
-- Long-term profitability (Lifetime Value beyond day 0)
-- Retention cohort analysis (Day 7, Day 30 retention rates)
-- Ad format optimization (which ad types make most money)
-- Session depth and user engagement patterns
-- Sophisticated user segmentation
+- Automated revenue reconciliation with alerting
+- Week-over-week trend analysis ("this week vs last week")
+- Geographic arbitrage opportunities (same app, different countries)
+- Cross-app performance comparison (which app is winning?)
+- Dangerous signal detection (ROAS drops, revenue mismatches)
+- Historical context beyond 30-60 days
+
+---
+
+## How This System Enables Better Decisions
+
+### UA Team: Daily Operations
+
+**Morning Workflow (5-10 minutes instead of 30+ minutes):**
+
+1. **Revenue Reconciliation Dashboard**:
+   ```sql
+   Query: "Yesterday's adjust_rev vs admob_rev by app/country"
+
+   Alert Example:
+   ⚠️ India - AI Video Generator
+   adjust_rev: $502 | admob_rev: $479 | mismatch: 4.8% (OK)
+
+   🚨 Bangladesh - Text to Video FLIX
+   adjust_rev: $425 | admob_rev: $385 | mismatch: 10.4% (INVESTIGATE!)
+
+   Action: Check Adjust SDK for Bangladesh, verify attribution
+   ```
+
+2. **ROAS Performance by Country**:
+   ```sql
+   Query: "Yesterday's ROAS_D0 by country, flagged if < 1.0"
+
+   Thailand: ROAS = 1.08 ✅ KEEP SPENDING ($1406/day budget)
+   India: ROAS = 0.72 ⚠️ REVIEW (might need D1 data)
+   Egypt: ROAS = 0.42 🚨 PAUSE CAMPAIGN (losing $58 per day)
+
+   Decision: Reduce Egypt budget from $138/day to $50/day (test)
+   ```
+
+3. **Budget Allocation Optimization**:
+   ```sql
+   Query: "Which countries have ROAS > 1.5 AND CPI < $0.20?"
+
+   Result: Thailand (ROAS=1.08, CPI=$0.11), Brazil (ROAS=1.04, CPI=$0.11)
+
+   Decision: Increase Thailand budget from $1400 to $2000/day
+   ```
+
+4. **Campaign Performance Alerts**:
+   ```sql
+   Query: "Any country with >20% ROAS drop vs yesterday?"
+
+   Alert: India ROAS dropped from 0.85 to 0.72 (-15%)
+   Possible causes: Holiday? Competitor campaign? Check logs
+
+   Decision: Monitor for 1 more day before action
+   ```
+
+### BOD: Strategic Planning (Monthly/Quarterly)
+
+**Board Meeting Insights (Previously impossible with Google Sheets):**
+
+1. **Portfolio Performance View**:
+   ```sql
+   Query: "Last 90 days - top 5 apps by revenue, bottom 5 by ROAS"
+
+   Top Performers:
+   1. AI Video Generator: $142K revenue, ROAS 1.05
+   2. Text to Video FLIX: $85K revenue, ROAS 0.98
+
+   Bottom Performers:
+   4. [App Name]: $12K revenue, ROAS 0.42
+   5. [App Name]: $8K revenue, ROAS 0.35
+
+   Decision: Sunset bottom 2 apps, redirect budget to top performers
+   ```
+
+2. **Geographic Expansion Opportunities**:
+   ```sql
+   Query: "Countries with high eCPM (>$15) but low current spend (<$500/day)"
+
+   Philippines: eCPM=$18, current spend=$200/day, ROAS=1.15
+
+   Opportunity: Test $2000/day budget for 2 weeks
+   Projected revenue increase: $3,600/day if ROAS holds
+
+   Decision: Approve $20K test budget for Philippines expansion
+   ```
+
+3. **Product Roadmap Prioritization**:
+   ```sql
+   Query: "IMPDAU_D0 trends - which apps have best engagement?"
+
+   AI Video Generator: IMPDAU=4.2 (users love it, watch lots of ads)
+   Text to Video FLIX: IMPDAU=2.8 (lower engagement)
+
+   Decision: Prioritize features for AI Video Generator (proven engagement)
+   ```
+
+4. **Financial Forecasting**:
+   ```sql
+   Query: "If we scale Thailand & Brazil by 2x (maintain current ROAS), projected revenue?"
+
+   Current: Thailand $1513/day + Brazil $814/day = $2327/day
+   Scaled 2x: $4654/day revenue, $4200/day cost
+   Net profit: $454/day → $13,620/month additional profit
+
+   Decision: Approve budget increase, hire 1 more UA specialist
+   ```
+
+### DEV Team: Product Development
+
+**Feature Impact Validation:**
+
+1. **New Feature A/B Testing**:
+   ```sql
+   Scenario: Added new video templates last week
+
+   Query: "Week-over-week IMPDAU_D0 change for AI Video Generator"
+
+   Before: IMPDAU=3.5
+   After: IMPDAU=4.2 (+20%)
+
+   Validation: New templates increased engagement significantly
+   Decision: Build 10 more similar templates this sprint
+   ```
+
+2. **Monetization Optimization**:
+   ```sql
+   Query: "Countries with high DAU but low IMPDAU - undermonetized"
+
+   India: DAU=24,534, IMPDAU=2.1 (users not seeing enough ads)
+   Thailand: DAU=14,608, IMPDAU=3.9 (well monetized)
+
+   Decision: Add natural ad placements in India version
+   ```
+
+3. **Retention vs Monetization Tradeoff**:
+   ```sql
+   Query: "Apps with ROAS_D0 < 1.0 but D7 retention > 30%"
+
+   Text to Video FLIX: ROAS_D0=0.98, D7 retention=35%
+
+   Analysis: Users come back, LTV will recover D0 loss
+   Decision: Don't increase ads (will hurt retention), keep current balance
+   ```
+
+### The Weekly Report (Automated)
+
+**"This Week vs Last Week" Analysis:**
+
+```
+Week 42 Performance Summary (Oct 14-20, 2025)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📈 Overall Metrics:
+Revenue: $48,250 (+8% vs last week)
+Marketing Spend: $42,100 (+12% vs last week)
+Net Profit: $6,150 (-15% vs last week) ⚠️
+
+🏆 Top Performing Countries:
+Thailand: ROAS 1.08 (+3% vs last week) ✅
+Brazil: ROAS 1.04 (stable)
+Vietnam: ROAS 1.15 (+18% vs last week) 🚀
+
+⚠️ Countries to Watch:
+India: ROAS 0.72 (-18% vs last week) - investigate
+Egypt: ROAS 0.42 (-25% vs last week) - consider pause
+
+📱 App Performance:
+AI Video Generator: $28K revenue (+12%)
+Text to Video FLIX: $15K revenue (+5%)
+
+🎯 Recommended Actions:
+1. Investigate India ROAS drop (competitor activity?)
+2. Pause or reduce Egypt campaign
+3. Increase Thailand/Vietnam budgets (+20%)
+4. Test Philippines expansion ($2K/day for 2 weeks)
+```
+
+### Dangerous Signal Detection (Automated Alerts)
+
+**System should flag these scenarios automatically:**
+
+1. **Revenue Mismatch Alert**:
+   - Any country/app with >5% adjust_rev vs admob_rev difference
+   - Notify: UA team immediately via Telegram
+
+2. **ROAS Cliff Alert**:
+   - Any country with >15% ROAS drop in single day
+   - Notify: UA team + BOD
+
+3. **Budget Burn Alert**:
+   - Any campaign spending >110% of daily budget
+   - Notify: UA team
+
+4. **Data Freshness Alert**:
+   - If latest data is >36 hours old
+   - Notify: Data team (YOU!)
+
+5. **Profitability Alert**:
+   - Any app with ROAS < 0.8 for 3+ consecutive days
+   - Notify: UA team + Product team
 
 ---
 
@@ -246,6 +625,240 @@ Snowflake only → Revenue analysis
 - Storage: ~200 MB/year (compressed columnar)
 
 **Conclusion:** Volumes are SMALL by industry standards, easily manageable
+
+---
+
+## Data Collection Orchestration Strategy
+
+**Decision Date:** October 27, 2025
+
+### Orchestration Approach: GitHub Actions Scheduled Workflows
+
+**Selected Solution:**
+```yaml
+# .github/workflows/data_collection.yml
+on:
+  schedule:
+    - cron: '0 2 * * *'    # AdMob daily at 2 AM UTC
+    - cron: '0 * * * *'    # Adjust hourly
+  workflow_dispatch:        # Manual trigger for demo/testing
+```
+
+**Why GitHub Actions:**
+1. **Already in stack** - CI/CD requirement for test (5 pts)
+2. **Zero additional infrastructure** - No servers to manage
+3. **Free** - Included in GitHub free tier
+4. **Easy to demonstrate** - Show workflow runs during test
+5. **Industry-standard** - Used by many production data pipelines
+
+**Execution Pattern:**
+- **AdMob Pipeline:** Runs daily at 2 AM UTC
+  - Fetches previous day's data (13,500+ rows)
+  - Loads to Snowflake RAW.ADMOB_DAILY
+  - Execution time: ~2-3 minutes
+
+- **Adjust Pipeline:** Runs every hour on the hour
+  - Fetches previous hour's data (~39 rows)
+  - Loads to Snowflake RAW.ADJUST_HOURLY
+  - Execution time: ~1 minute
+
+- **dbt Transformations:** Runs after data collection
+  - Triggered by workflow completion
+  - Incremental models process only new data
+  - Execution time: ~5 minutes
+
+**Alternatives Considered:**
+
+| Solution | Pros | Cons | Decision |
+|----------|------|------|----------|
+| **Cron Jobs** | Simple, native Linux | Requires 24/7 server ($$$), no monitoring | ❌ Rejected |
+| **Apache Airflow** | Enterprise-grade, powerful | Overkill for 2 pipelines, complex setup | ❌ Rejected |
+| **dbt Cloud** | Built-in scheduler | Paid service, handles dbt only (not data collection) | ❌ Rejected |
+| **GitHub Actions** | Free, already in stack, easy demo | Execution time limits (6 hrs max) | ✅ Selected |
+
+**Mid-Course Test Strategy:**
+- **Manual execution acceptable** for demonstration
+- **Scheduled workflows = bonus points** (shows production thinking)
+- **Focus:** Pipeline correctness > automation complexity
+- **Demo approach:** Run scripts manually, explain scheduled workflow in documentation
+
+**Production Deployment Considerations:**
+- GitHub Actions limits: 2,000 minutes/month (free tier) = ~67 hours
+- Our usage: (1 min × 24 runs/day) + (3 min × 1 run/day) = ~30 min/day = 900 min/month
+- **Conclusion:** Well within free tier limits for production use
+
+**Monitoring & Alerting:**
+- GitHub Actions provides email notifications on workflow failures
+- Can integrate with Slack/Discord for real-time alerts
+- Workflow run history provides audit trail
+
+**Future Enhancements (Post-Test):**
+- Add retry logic for API failures
+- Implement exponential backoff for rate limiting
+- Add data quality checks before loading
+- Integrate with monitoring tools (DataDog, New Relic)
+
+---
+
+## Mid-Course Test Requirements Mapping
+
+### Real-Time Pipeline (Section 1: 20 points)
+
+**Test Requirement:**
+> "Real-Time (Streaming) Pipeline Script: Simulates row-by-row data ingestion, collects data from API or streaming source, must demonstrate incremental data collection"
+
+**Your Implementation:**
+```python
+# Script: scripts/collect_adjust_realtime.py
+# Source: Adjust API (hourly granularity)
+# Destination: PostgreSQL (Docker container)
+# Pattern: Row-by-row incremental ingestion
+```
+
+**Why This Qualifies:**
+- ✅ **API Source:** Adjust API provides hourly data (936 rows/day = ~39 rows/hour)
+- ✅ **Incremental:** Each hour = new batch of rows by (app, country, hour_timestamp)
+- ✅ **Row-by-Row:** Script processes each API response row individually into PostgreSQL
+- ✅ **Fresh Data:** Timestamps prove data collected during demo (`loaded_at = NOW()`)
+- ✅ **Operational Use Case:** Hot storage for real-time campaign monitoring (last 14 days)
+
+**Demo Script:**
+```bash
+# Show PostgreSQL running in Docker
+docker ps | grep postgres
+
+# Execute real-time collection
+python scripts/collect_adjust_realtime.py --hours 1
+
+# Output shows row-by-row ingestion:
+# ✓ Inserted: AI Video Generator | Thailand | 2025-10-22 14:00:00
+# ✓ Inserted: AI Video Generator | Vietnam | 2025-10-22 14:00:00
+# ... (39 rows total for last hour)
+
+# Query PostgreSQL showing FRESH data
+psql -d mobile_analytics -c "
+  SELECT app, country, hour_timestamp, installs, revenue, loaded_at
+  FROM adjust_hourly
+  WHERE loaded_at >= NOW() - INTERVAL '5 minutes'
+  ORDER BY loaded_at DESC
+  LIMIT 10;"
+
+# Timestamps prove data is NEW (collected seconds ago)
+```
+
+---
+
+### Batch Pipeline (Section 1: 20 points)
+
+**Test Requirement:**
+> "Batch Pipeline Script: Ingests data in batches, each batch must contain ≥500 rows, must demonstrate batch processing capability"
+
+**Your Implementation:**
+```python
+# Script: scripts/collect_admob_batch.py
+# Source: AdMob API (daily granularity)
+# Destination: Snowflake
+# Pattern: Daily batches of 13,500+ rows
+```
+
+**Why This Qualifies:**
+- ✅ **Batch Size:** 13,508 rows per day (27x the 500-row requirement!)
+- ✅ **Batch Processing:** Processes entire day at once, not row-by-row
+- ✅ **Multiple Batches:** Can collect 7 days = 7 batches = ~94,000 total rows
+- ✅ **Fresh Data:** Timestamps in Snowflake prove data collected during demo
+- ✅ **Historical Use Case:** Cold storage for strategic analysis (forever retention)
+
+**Demo Script:**
+```bash
+# Execute batch collection
+python scripts/collect_admob_batch.py --days 7
+
+# Output shows batch processing:
+# 📦 Fetching batch for 2025-10-22...
+#    Batch size: 13,508 rows
+#    ✓ Loaded 13,508 rows to Snowflake
+# 📦 Fetching batch for 2025-10-21...
+#    Batch size: 13,487 rows
+#    ✓ Loaded 13,487 rows to Snowflake
+# ...
+# ✅ Total: 94,638 rows loaded (7 batches)
+#    Average batch size: 13,520 rows
+
+# Query Snowflake showing FRESH data
+SELECT DATE(date) as report_date,
+       COUNT(*) as row_count,
+       SUM(admob_revenue) as total_revenue,
+       MAX(loaded_at) as last_loaded
+FROM raw.admob_daily
+WHERE loaded_at >= CURRENT_DATE - 1
+GROUP BY DATE(date)
+ORDER BY report_date DESC;
+
+# Last_loaded column shows fresh timestamps
+```
+
+---
+
+### PostgreSQL Docker (Section 1: 5 points)
+
+**Test Requirement:**
+> "PostgreSQL database running via Docker containerization, database accessible and operational during demo"
+
+**Your Implementation:**
+```yaml
+# File: docker-compose.yml
+services:
+  postgres:
+    image: postgres:15
+    container_name: mobile_analytics_db
+    environment:
+      POSTGRES_DB: mobile_analytics
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+```
+
+**Demo Script:**
+```bash
+# Start Docker container
+docker-compose up -d
+
+# Verify running
+docker ps
+# Shows: mobile_analytics_db running on port 5432
+
+# Test connection
+psql -h localhost -p 5432 -U postgres -d mobile_analytics -c "SELECT version();"
+# Returns PostgreSQL version confirming connectivity
+
+# Show table exists
+psql -d mobile_analytics -c "\dt"
+# Lists: adjust_hourly table with schema
+```
+
+---
+
+### Business Justification: Why This Architecture?
+
+**Hot Storage (PostgreSQL - Real-Time):**
+- Operations team monitors campaigns **hourly** during high-spend days
+- Detect install spikes or ROAS drops **within hours**, not next day
+- PostgreSQL optimized for **fast transactional queries** (filter by last 24 hours)
+- 14-day retention sufficient for operational decisions
+
+**Cold Storage (Snowflake - Batch):**
+- AdMob API **only provides daily granularity** (technical limitation, not choice)
+- Revenue is **source of truth** - needs permanent historical storage for audits
+- Snowflake optimized for **analytical aggregations** (month-over-month trends, cohort analysis)
+- Forever retention for BOD strategic planning
+
+**This Isn't Artificial - This IS How Mobile Analytics Actually Works:**
+- User acquisition tracked **hourly** (bidding adjustments happen intra-day)
+- Revenue reconciliation happens **daily** (bank transfers, reporting, audits)
+- Standard industry pattern: hot operational database + cold analytical warehouse
 
 ---
 
@@ -774,521 +1387,290 @@ Structure:
 
 ## Dimensional Model Design
 
-The dimensional model (star schema) is how we organize data for efficient analytics. It separates FACTS (measurements) from DIMENSIONS (context).
+**Philosophy**: Start with business reality (current Google Sheet structure), then evolve architecture as needed.
+
+### Current State: Google Sheet Structure (18 Columns)
+
+**What's Working Today:**
+```
+app, store_id, day, country_code, country, os_name,
+install, daus, adjust_rev, adjust_imp,
+ad_impressions_total_D0, ad_revenue_total_D0,
+network_cost, adjust_cost, key,
+admob_rev, admob_imp, paid_impressions
+```
+
+**Key Insight**: Everything is already pre-joined at daily grain by (app, country, day). This unified structure enables:
+- Quick ROAS calculation: `admob_rev / network_cost`
+- Revenue reconciliation: `adjust_rev vs admob_rev`
+- eCPM: `(admob_rev × 1000) / admob_imp`
+- IMPDAU_D0: `ad_impressions_total_D0 / daus`
+- CPI: `network_cost / install`
+
+**Business Priority**: Preserve this unified daily view - it's what teams actually use.
+
+### Target Architecture: Business-First Dimensional Model
+
+**Core Principle**: Build data warehouse that mirrors current workflow, then optimize.
+
+### Phase 1: Unified Daily Fact Table (MVP for Test + Production)
+
+**Fact Table: `fct_daily_performance`**
+
+**Grain**: One row per app, per date, per country (matches current Google Sheet exactly)
+
+**Purpose**: Single source of truth for all Day 0 business metrics - ROAS, eCPM, IMPDAU, CPI
+
+**Dimensions (Foreign Keys)**:
+- `date_key` → `dim_date` (calendar attributes: year, month, quarter, day_of_week)
+- `app_key` → `dim_app` (app name, store_id, category, platform)
+- `country_key` → `dim_country` (country name, code, region, tier)
+
+**Adjust Metrics** (user acquisition):
+- `installs` - new users today
+- `daus` - daily active users
+- `adjust_revenue` - estimated revenue from Adjust SDK
+- `adjust_impressions` - estimated ad impressions
+- `ad_impressions_d0` - actual Day 0 impressions
+- `ad_revenue_d0` - actual Day 0 revenue
+- `network_cost` - marketing spend
+- `paid_impressions` - paid vs organic indicator
+
+**AdMob Metrics** (source of truth revenue):
+- `admob_revenue` - actual revenue (bank account reconciled)
+- `admob_impressions` - actual ad impressions served
+
+**Calculated Metrics** (dbt intermediate layer):
+- `roas_d0` = `admob_revenue / NULLIF(network_cost, 0)`
+- `ecpm` = `(admob_revenue × 1000) / NULLIF(admob_impressions, 0)`
+- `impdau_d0` = `ad_impressions_d0 / NULLIF(daus, 0)`
+- `cpi` = `network_cost / NULLIF(installs, 0)`
+- `revenue_mismatch_pct` = `ABS(adjust_revenue - admob_revenue) / NULLIF(admob_revenue, 0) × 100`
+
+**Why This Design**:
+1. **Familiar**: Matches current Google Sheet exactly - zero learning curve
+2. **Complete**: All ROAS calculations possible in single table query
+3. **Test-Ready**: Demonstrates dimensional modeling (fact + 3 dimensions) for mid-course test
+4. **Production-Ready**: Enables all business decisions documented in "How This System Enables Better Decisions"
+5. **Scalable**: Can add more dimensions later (campaign, ad_format) without breaking existing queries
+
+### Supporting Dimension Tables
+
+**`dim_date`** (Type 1 SCD - static calendar):
+- `date_key` (PK, surrogate key)
+- `date` (natural key: 2025-10-22)
+- `year`, `quarter`, `month`, `day`
+- `day_of_week`, `day_name` (Monday, Tuesday...)
+- `is_weekend` (boolean)
+- `is_holiday` (optional - country-specific holidays)
+
+**`dim_app`** (Type 1 SCD - app rarely changes):
+- `app_key` (PK, surrogate key)
+- `app_id` (natural key from source: `ai.video.generator.text.video`)
+- `store_id` (alternate key from Adjust)
+- `app_name` (display name: "AI GPT Generator")
+- `category` (entertainment, productivity, utility)
+- `platform` (Android, iOS)
+- `launch_date`, `sunset_date` (nullable)
+
+**`dim_country`** (Type 1 SCD - static):
+- `country_key` (PK, surrogate key)
+- `country_code` (natural key: TH, VN, BD)
+- `country_name` (Thailand, Vietnam, Bangladesh)
+- `region` (Southeast Asia, South Asia, Middle East)
+- `tier` (Tier 1: US/UK/AU, Tier 2: developed, Tier 3: emerging)
+- `currency` (THB, VND, BDT)
 
 ### Core Concept: Facts vs Dimensions
 
-**Facts (Measurements):**
-- Things you measure and want to analyze
-- Numeric values that can be summed, averaged
-- Examples: revenue, impressions, installs, costs
-- Large tables (millions of rows)
+**Facts** = What you measure (revenue, installs, ROAS)
+**Dimensions** = Context for analysis (which app, which country, when)
 
-**Dimensions (Context):**
-- Descriptive attributes that give facts meaning
-- Text and categorical data
-- Examples: which app, which country, which date, which ad format
-- Small tables (hundreds to thousands of rows)
+**Why Separate?**
+- Store "Thailand" once in `dim_country`, not repeated 1M times in fact table
+- Change country name in ONE place, updates everywhere
+- Small dimension tables (100s of rows) join efficiently to large fact tables (millions of rows)
 
-**Why separate them?**
-- Efficiency: Store "United States" once in dimension table, not repeated 1 million times in fact table
-- Consistency: Change country name in ONE place (dimension), updates everywhere
-- Query performance: Small dimension tables join to large fact tables efficiently
+### Visual: Simplified Star Schema
 
-### The Star Schema Structure
-
-Imagine a star with fact table in center, dimension tables radiating outward:
-
-```
-        dim_date              dim_country
-            │                      │
-            │                      │
-            └─────┐          ┌─────┘
-                  │          │
-    dim_app ──────┤  FACT   ├────── dim_platform
-                  │  TABLE  │
-                  │          │
-            ┌─────┘          └─────┐
-            │                      │
-            │                      │
-     dim_ad_format            dim_campaign
+```text
+        dim_date                dim_country
+            │                        │
+            │                        │
+            └────────┐      ┌────────┘
+                     │      │
+         dim_app ────┤ FACT ├──────────
+                     │ TABLE│
+                     └──────┘
+         fct_daily_performance
 ```
 
-### Fact Table 1: fact_acquisition_hourly (PostgreSQL - Real-Time)
+**Why Simple**:
+- No platform dimension (stored as attribute in fact table - 99.9% of apps are Android-only)
+- No ad_format/ad_unit dimensions yet (AdMob data aggregated daily, can add later if needed)
+- No campaign dimension yet (Adjust provides network_name, but not critical for Day 0 ROAS)
+- Focus: Get ROAS calculations working perfectly first
 
-**Source:** Adjust API (hourly granularity)
+### Example Queries Enabled by This Model
 
-**Purpose:** Real-time user acquisition tracking for operational decisions
-
-**Grain:** One row per app, per hour, per country, per platform
-
-**Storage:** PostgreSQL (last 14 days only)
-
-**Primary key:** acquisition_id
-
-**Foreign keys:**
-- app_id → dim_app
-- hour_id → dim_hour (timestamp: 2025-10-18T11:00:00)
-- country_id → dim_country
-- platform_id → dim_platform
-
-**Metrics:**
-- installs (hourly new users)
-- daus (daily active users - same for all hours in a day)
-- ad_revenue (hourly ad revenue from Adjust SDK)
-- ad_impressions (hourly impressions)
-- network_cost (hourly marketing spend)
-- ad_revenue_d0 (cumulative Day 0 revenue for installs in this hour)
-- ad_impressions_d0 (cumulative Day 0 impressions)
-
-**Use Cases:**
-- Real-time campaign monitoring
-- Peak hour analysis (when do best users install?)
-- Immediate ROI calculation (network_cost vs ad_revenue_d0)
-- Hourly arbitrage opportunities
-
-### Fact Table 2: fact_revenue_daily (Snowflake - Historical)
-
-**Source:** AdMob API (daily granularity)
-
-**Purpose:** Complete ad revenue analysis with full detail
-
-**Grain:** One row per app, per date, per country, per platform, per ad_format, per ad_unit
-
-**Storage:** Snowflake (all history)
-
-**Primary key:** revenue_id
-
-**Foreign keys:**
-- app_id → dim_app
-- date_id → dim_date
-- country_id → dim_country
-- platform_id → dim_platform
-- ad_format_id → dim_ad_format
-- ad_unit_id → dim_ad_unit
-
-**Metrics (from AdMob):**
-- estimated_earnings (revenue in USD)
-- impressions
-- clicks
-- ad_requests
-- matched_requests
-- observed_ecpm
-
-**Calculated:**
-- click_through_rate = clicks / impressions
-- match_rate = matched_requests / ad_requests
-
-**Use Cases:**
-- Ad format performance analysis
-- Ad unit optimization
-- Platform comparison (iOS vs Android revenue)
-- Country revenue breakdown
-
-### Fact Table 3: fact_acquisition_daily (Snowflake - Historical)
-
-**Source:** Adjust API aggregated from hourly
-
-**Purpose:** User acquisition metrics matched with AdMob revenue
-
-**Grain:** One row per app, per date, per country, per platform
-
-**Storage:** Snowflake (all history)
-
-**Primary key:** acquisition_daily_id
-
-**Foreign keys:**
-- app_id → dim_app
-- date_id → dim_date
-- country_id → dim_country
-- platform_id → dim_platform
-
-**Metrics:**
-- installs
-- daus
-- ad_revenue (Adjust SDK - for reconciliation with AdMob)
-- ad_impressions (Adjust SDK)
-- network_cost
-- network_cost_diff
-
-**Calculated:**
-- cost_per_install = network_cost / installs
-- revenue_per_user = ad_revenue / daus
-
-**Use Cases:**
-- LTV:CAC ratio analysis
-- Marketing ROI calculations
-- Data reconciliation (Adjust vs AdMob revenue)
-
-**Example row:**
-```
-revenue_id: 12345
-app_id: 5 (links to "AI Video Generator" in dim_app)
-date_id: 20250115 (links to January 15, 2025 in dim_date)
-country_id: 10 (links to "United Arab Emirates" in dim_country)
-platform_id: 1 (links to "Android" in dim_platform)
-ad_format_id: 3 (links to "Rewarded Video" in dim_ad_format)
-ad_unit_id: 22 (links to "game_complete_reward" in dim_ad_unit)
-campaign_id: 105 (links to "Facebook_UAE_Jan" in dim_campaign)
-revenue: 145.50
-impressions: 3200
-daus: 850
-installs: 120
-marketing_cost: 95.00
-roi: 0.53 (53% return)
-```
-
-**Query example:**
-"Show me total revenue by app for January 2025"
-```sql
-SELECT
-  a.app_name,
-  SUM(f.revenue) as total_revenue
-FROM fact_revenue_daily f
-JOIN dim_app a ON f.app_id = a.app_id
-JOIN dim_date d ON f.date_id = d.date_id
-WHERE d.year = 2025 AND d.month = 1
-GROUP BY a.app_name
-```
-
-### Fact Table 4: fact_cohort_retention (Snowflake - Historical)
-
-**Source:** Adjust API cohort metrics
-
-**Purpose:** Track user cohorts over time to measure retention and lifetime value
-
-**Grain:** One row per install cohort, per cohort_day (D0, D1, D7, D30)
-
-**Storage:** Snowflake (all history)
-
-**Primary key:** cohort_id
-
-**Foreign keys:**
-- app_id → dim_app
-- cohort_date_id → dim_date (the date users installed)
-- country_id → dim_country
-- platform_id → dim_platform
-
-**Dimensions:**
-- cohort_maturity (D0, D1, D7, D30 - days since install)
-
-**Metrics (from Adjust):**
-- cohort_size_d0 (total installs in cohort)
-- cohort_size_d1 (users retained on Day 1)
-- cohort_size_d7 (users retained on Day 7)
-- cohort_size_d30 (users retained on Day 30)
-
-**Calculated:**
-- retention_rate_d1 = cohort_size_d1 / cohort_size_d0
-- retention_rate_d7 = cohort_size_d7 / cohort_size_d0
-- retention_rate_d30 = cohort_size_d30 / cohort_size_d0
-
-**Use Cases:**
-- Long-term user retention analysis
-- Country/platform retention comparison
-- LTV forecasting (combine with revenue data)
-- Product improvement validation (did feature increase retention?)
-
-**Example row:**
-```
-cohort_id: 67890
-app_id: 5 (AI Video Generator)
-cohort_date_id: 20250110 (Jan 10, 2025 install cohort)
-country_id: 10 (UAE)
-platform_id: 1 (Android)
-cohort_maturity: "D7"
-cohort_size_d0: 250 (installs)
-cohort_size_d7: 45 (still active on Day 7)
-retention_rate_d7: 0.18 (18% retained)
-```
-
-**Query:** "Which countries have best Day 7 retention?"
+**Query 1: Yesterday's ROAS by country**
 ```sql
 SELECT
   c.country_name,
-  AVG(f.retention_rate_d7) as avg_retention
-FROM fact_cohort_retention f
-JOIN dim_country c ON f.country_id = c.country_id
+  SUM(f.admob_revenue) as revenue,
+  SUM(f.network_cost) as cost,
+  SUM(f.admob_revenue) / NULLIF(SUM(f.network_cost), 0) as roas_d0
+FROM fct_daily_performance f
+JOIN dim_country c ON f.country_key = c.country_key
+JOIN dim_date d ON f.date_key = d.date_key
+WHERE d.date = CURRENT_DATE - 1
 GROUP BY c.country_name
-ORDER BY avg_retention DESC
+ORDER BY roas_d0 DESC;
 ```
 
-### Dimension Table: dim_app
-
-**Purpose:** Master list of all apps with descriptive attributes
-
-**Grain:** One row per app
-
-**Primary key:** app_id (surrogate key, auto-increment integer)
-
-**Natural key:** store_id (unique app package identifier like "com.example.app")
-
-**Attributes:**
-- app_name (display name: "AI Video Generator")
-- store_id (package ID: "ai.video.generator.text.video")
-- category (AI Apps, Gaming, Utility)
-- subcategory (Video Editing, Puzzle Games, etc.)
-- launch_date (when app first released)
-- status (Active, Sunset, Beta)
-- primary_market (which country is main focus)
-- description (what app does)
-
-**Slowly Changing Dimension Type:** Type 1 (overwrite changes, don't track history)
-
-Why Type 1: App name might change, but we don't need historical names. Current value is fine.
-
-### Dimension Table: dim_country
-
-**Purpose:** Geographic reference with regional groupings
-
-**Grain:** One row per country
-
-**Primary key:** country_id
-
-**Natural key:** country_code (ISO 2-letter: "AE", "US", "IN")
-
-**Attributes:**
-- country_code ("AE")
-- country_name ("United Arab Emirates")
-- region ("Middle East")
-- continent ("Asia")
-- subregion ("Western Asia")
-- currency ("AED")
-- language_primary ("Arabic")
-
-**Optional enrichment:**
-- gdp_per_capita (economic indicator)
-- mobile_penetration_rate (market maturity indicator)
-- population
-- timezone_primary
-
-### Dimension Table: dim_date
-
-**Purpose:** Calendar table with date attributes for time-based analysis
-
-**Grain:** One row per date
-
-**Primary key:** date_id (YYYYMMDD format: 20250115)
-
-**Natural key:** date (DATE type: 2025-01-15)
-
-**Attributes:**
-
-Basic:
-- date (2025-01-15)
-- day_name (Wednesday)
-- day_of_week (3)
-- day_of_month (15)
-- day_of_year (15)
-
-Week:
-- week_number (3)
-- week_start_date (Monday of that week)
-- week_end_date (Sunday of that week)
-
-Month:
-- month_number (1)
-- month_name (January)
-- month_abbr (Jan)
-- month_start_date
-- month_end_date
-
-Quarter:
-- quarter (Q1)
-- quarter_start_date
-- quarter_end_date
-
-Year:
-- year (2025)
-- fiscal_year (if different from calendar year)
-
-Special flags:
-- is_weekend (TRUE/FALSE)
-- is_holiday (TRUE/FALSE)
-- is_month_end (TRUE/FALSE)
-- is_quarter_end (TRUE/FALSE)
-
-**Why this is useful:**
-Makes time-based queries easy:
-- "Show revenue for all weekends"
-- "Compare Q1 2025 to Q1 2024"
-- "Exclude holidays from analysis"
-
-### Dimension Table: dim_platform
-
-**Purpose:** Operating system reference
-
-**Grain:** One row per platform
-
-**Primary key:** platform_id
-
-**Attributes:**
-- platform_name ("Android")
-- os_family ("Android")
-- vendor ("Google")
-
-Simple table (only 2-3 rows total: Android, iOS, maybe Web)
-
-### Dimension Table: dim_ad_format
-
-**Purpose:** Ad type reference
-
-**Grain:** One row per ad format type
-
-**Primary key:** ad_format_id
-
-**Attributes:**
-- format_name ("Rewarded Video")
-- format_code ("rewarded_video")
-- format_category ("Video Ads")
-- is_interruptive (TRUE for interstitial, FALSE for banner)
-- typical_ecpm_range ("$10-$20")
-
-**Example rows:**
-- Banner (small ad at top/bottom, low eCPM, high volume)
-- Interstitial (full-screen ad, medium eCPM, medium volume)
-- Rewarded Video (user watches for reward, high eCPM, lower volume)
-- Native (blended into app content)
-- App Open (shown when app launches)
-
-### Dimension Table: dim_ad_unit
-
-**Purpose:** Specific ad placements within apps
-
-**Grain:** One row per ad unit (unique ad placement)
-
-**Primary key:** ad_unit_id
-
-**Attributes:**
-- ad_unit_name ("game_complete_reward")
-- ad_unit_code (technical ID from AdMob)
-- app_id (which app this ad unit belongs to)
-- ad_format_id (which format type)
-- placement_description ("Shown after user completes level")
-- is_active (TRUE/FALSE)
-
-**Example rows for video generator app:**
-- "home_banner" - Banner on home screen
-- "export_interstitial" - Interstitial after video export
-- "premium_reward" - Rewarded video for premium features
-
-### Dimension Table: dim_campaign
-
-**Purpose:** Marketing campaign tracking
-
-**Grain:** One row per campaign
-
-**Primary key:** campaign_id
-
-**Attributes:**
-- campaign_name ("Facebook_UAE_Video_Jan2025")
-- campaign_code (internal tracking code)
-- network ("Facebook Ads")
-- campaign_type ("User Acquisition")
-- start_date
-- end_date
-- budget_allocated
-- target_country
-- target_platform
-- creative_type ("Video Ad", "Static Image", "Carousel")
-- objective ("Installs", "Brand Awareness")
-- is_active
-
-**Special handling:**
-- campaign_id = 0 for organic users (no paid campaign)
-- Allows filtering paid vs organic easily
-
-### Entity Relationship Diagram
-
-```
-┌─────────────────────┐
-│     dim_app         │
-│ ─────────────────── │
-│ PK: app_id          │
-│ store_id            │
-│ app_name            │
-│ category            │
-│ launch_date         │
-└──────────┬──────────┘
-           │
-           │ 1
-           │
-           │ N
-┌──────────▼──────────────────────────────────────┐
-│         fact_revenue_daily                      │
-│ ──────────────────────────────────────────────  │
-│ PK: revenue_id                                  │
-│ FK: app_id ─────────────┐                       │
-│ FK: date_id ────────────┼────┐                  │
-│ FK: country_id ─────────┼────┼───┐              │
-│ FK: platform_id ────────┼────┼───┼───┐          │
-│ FK: ad_format_id ───────┼────┼───┼───┼───┐      │
-│ FK: ad_unit_id ─────────┼────┼───┼───┼───┼─┐    │
-│ FK: campaign_id ────────┼────┼───┼───┼───┼─┼─┐  │
-│                         │    │   │   │   │ │ │  │
-│ revenue                 │    │   │   │   │ │ │  │
-│ impressions             │    │   │   │   │ │ │  │
-│ installs                │    │   │   │   │ │ │  │
-│ daus                    │    │   │   │   │ │ │  │
-│ marketing_cost          │    │   │   │   │ │ │  │
-│ roi                     │    │   │   │   │ │ │  │
-└─────────────────────────┼────┼───┼───┼───┼─┼─┼──┘
-                          │    │   │   │   │ │ │
-                  ┌───────┘    │   │   │   │ │ │
-                  │ N          │   │   │   │ │ │
-                  │ 1          │   │   │   │ │ │
-         ┌────────▼────────┐   │   │   │   │ │ │
-         │   dim_date      │   │   │   │   │ │ │
-         │ ─────────────── │   │   │   │   │ │ │
-         │ PK: date_id     │   │   │   │   │ │ │
-         │ date            │   │   │   │   │ │ │
-         │ day_name        │   │   │   │   │ │ │
-         │ month_name      │   │   │   │   │ │ │
-         │ quarter         │   │   │   │   │ │ │
-         │ is_weekend      │   │   │   │   │ │ │
-         └─────────────────┘   │   │   │   │ │ │
-                               │   │   │   │ │ │
-                      ┌────────┘   │   │   │ │ │
-                      │ N          │   │   │ │ │
-                      │ 1          │   │   │ │ │
-            ┌─────────▼────────┐   │   │   │ │ │
-            │  dim_country     │   │   │   │ │ │
-            │ ──────────────── │   │   │   │ │ │
-            │ PK: country_id   │   │   │   │ │ │
-            │ country_code     │   │   │   │ │ │
-            │ country_name     │   │   │   │ │ │
-            │ region           │   │   │   │ │ │
-            └──────────────────┘   │   │   │ │ │
-                                   │   │   │ │ │
-           (Similar connections for other dimensions...)
+**Query 2: Revenue mismatch alert**
+```sql
+SELECT
+  a.app_name,
+  c.country_name,
+  d.date,
+  f.adjust_revenue,
+  f.admob_revenue,
+  f.revenue_mismatch_pct
+FROM fct_daily_performance f
+JOIN dim_app a ON f.app_key = a.app_key
+JOIN dim_country c ON f.country_key = c.country_key
+JOIN dim_date d ON f.date_key = d.date_key
+WHERE f.revenue_mismatch_pct > 5.0  -- Alert threshold
+  AND d.date >= CURRENT_DATE - 7
+ORDER BY f.revenue_mismatch_pct DESC;
 ```
 
-### Who Uses What?
+**Query 3: Weekly UA team dashboard**
+```sql
+SELECT
+  a.app_name,
+  c.country_name,
+  SUM(f.installs) as total_installs,
+  SUM(f.network_cost) as total_spend,
+  SUM(f.admob_revenue) as total_revenue,
+  AVG(f.ecpm) as avg_ecpm,
+  AVG(f.impdau_d0) as avg_engagement,
+  SUM(f.admob_revenue) / NULLIF(SUM(f.network_cost), 0) as roas_d0
+FROM fct_daily_performance f
+JOIN dim_app a ON f.app_key = a.app_key
+JOIN dim_country c ON f.country_key = c.country_key
+JOIN dim_date d ON f.date_key = d.date_key
+WHERE d.date >= CURRENT_DATE - 7
+GROUP BY a.app_name, c.country_name
+HAVING SUM(f.network_cost) > 100  -- Only active campaigns
+ORDER BY roas_d0 ASC;  -- Worst performing first
+```
 
-**Operations Team:**
-- Queries fact_revenue_daily for today's performance
-- Joins with dim_app, dim_country for breakdowns
-- Real-time monitoring dashboards
+### Phase 2 Considerations (Future Enhancements)
 
-**Marketing Team:**
-- Queries fact_cohort_retention for campaign LTV
-- Uses dim_campaign for campaign attribution
-- ROI calculations and budget optimization
+**When to Add More Dimensions**:
 
-**Executive Team:**
-- Queries pre-aggregated marts (mart_app_performance)
-- High-level summaries and trends
-- Strategic decision-making
+**Campaign Dimension** - Add when:
+- Tracking >10 simultaneous campaigns
+- Need campaign-level budget allocation
+- A/B testing different creatives
+- Columns: campaign_id, campaign_name, network, creative_type, start_date, end_date
 
-**Data Analysts:**
-- Full access to all layers
-- Can create custom queries joining facts and dimensions
-- Ad-hoc analysis and deep dives
+**Ad Format/Unit Dimension** - Add when:
+- Monetization optimization becomes priority
+- Need to compare banner vs rewarded video performance
+- AdMob API data granularity increases to include format breakdown
+- Columns: ad_format (banner, interstitial, rewarded), ad_unit_id, placement_name
 
-**AI Agent (Future):**
-- Queries marts primarily (pre-aggregated, fast)
-- Uses dimension metadata to understand what data means
-- Converts natural language to SQL using table/column descriptions
+**Hourly Fact Table** - Add when:
+- Real-time monitoring required (hourly bidding decisions)
+- Peak hour analysis for optimization
+- Current daily grain sufficient for ROAS optimization
+
+**Cohort Retention Table** - Add when:
+- LTV analysis needed (beyond Day 0 ROAS)
+- Retention becomes key metric
+- Product team needs retention data for feature validation
+
+## Data Transformation Workflow
+
+### Overview: From API to Analytics
+
+**Current Manual Process** (Google Sheets):
+1. Export daily data from AdMob dashboard → CSV
+2. Export daily data from Adjust dashboard → CSV
+3. Manual copy-paste into Google Sheet
+4. VLOOKUP to match AdMob + Adjust by (app, day, country)
+5. Manual formula copy-down for ROAS calculations
+6. Looker Studio connects to sheet for visualization
+
+**Target Automated Process** (Data Warehouse):
+1. **Python scripts** fetch from AdMob/Adjust APIs daily
+2. **Raw layer** stores exact API responses in PostgreSQL/Snowflake
+3. **dbt staging** cleans and standardizes both sources
+4. **dbt intermediate** joins AdMob + Adjust, calculates ROAS metrics
+5. **dbt mart** creates `fct_daily_performance` with all dimensions
+6. **Looker Studio** (or internal dashboard) queries Snowflake directly
+
+### dbt Transformation Layers (3-Layer Architecture)
+
+**Layer 1: Staging** (`models/staging/`)
+
+Purpose: Clean and standardize raw data from each source
+
+Models:
+- `stg_admob__daily_performance` - AdMob revenue data (daily grain)
+  - Convert date string `20251024` → DATE type
+  - Divide microsValues by 1,000,000 for `estimated_earnings`, `observed_ecpm`
+  - Cast string integers to INTEGER type
+- `stg_adjust__daily_metrics` - Adjust user acquisition data (daily grain)
+  - Column renaming: `store_id` → `app_id`, `day` → `date`
+- Standardization: Country codes uppercase, nulls handled consistently
+- Deduplication: Remove duplicates based on natural keys
+
+**Layer 2: Intermediate** (`models/intermediate/`)
+
+Purpose: Join sources and calculate business metrics
+
+Models:
+- `int_daily_unified` - Joins AdMob + Adjust by (app, date, country)
+  - Calculates: `roas_d0`, `ecpm`, `impdau_d0`, `cpi`, `revenue_mismatch_pct`
+  - Left join (keep all AdMob revenue even if Adjust missing - organic users exist)
+  - Business logic centralized here (calculated once, reused everywhere)
+
+**Layer 3: Mart** (`models/marts/`)
+
+Purpose: Analytics-ready tables with dimensional model
+
+Models:
+- `fct_daily_performance` - Main fact table with all metrics and foreign keys
+- `dim_date` - Calendar table with date attributes
+- `dim_app` - App master list with metadata
+- `dim_country` - Country reference with region grouping
+
+### dbt Testing Strategy
+
+**Required Tests** (for mid-course test points):
+- **Uniqueness**: Primary keys must be unique
+- **Not Null**: Critical columns cannot be null
+- **Relationships**: Foreign keys must exist in dimension tables
+- **Accepted Values**: Enum columns restricted to valid values
+- **Custom Tests**: Business logic validation (e.g., ROAS > 0 when cost > 0)
+
+Example `fct_daily_performance` tests:
+```yaml
+tests:
+  - unique:
+      column_name: "date_key || '-' || app_key || '-' || country_key"
+  - not_null:
+      column_name: date_key
+  - relationships:
+      to: ref('dim_app')
+      field: app_key
+```
+
+---
 
 ---
 

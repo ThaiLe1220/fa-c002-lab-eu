@@ -1,183 +1,250 @@
 # Next Steps - Mobile Analytics Data Warehouse
 
-**Status:** ✅ Planning Complete - Ready for Implementation
-**Date:** October 19, 2025
+**Status:** ✅ Data Collection Complete → 🔄 dbt Transformations Next
+**Date:** October 27, 2025
+**Test Date:** November 1, 2025
 
 ---
 
 ## What We've Completed
 
-✅ **API Validation**
-- Tested AdMob API: Daily granularity, 13.5K rows/day
-- Tested Adjust API: Hourly granularity, 936 rows/day  
-- Confirmed cohort retention data available (D0, D1, D7, D30)
-- Documented limitations (no HOUR in AdMob, no IAP tracking)
+✅ **Data Collection Pipeline (Oct 27) - 35/100 pts**
+- **AdMob daily pipeline:** 16,151 rows loaded (pure RAW)
+- **Adjust hourly pipeline:** 127,797 rows loaded (pure RAW)
+- **Pure RAW architecture:** No transformations in Python, exact API responses
+- **Snowflake RAW tables:** ADMOB_DAILY, ADJUST_HOURLY created and populated
+- **Validation script:** `check_data.py` shows random samples from both tables
 
-✅ **Complete Planning**
-- Data strategy document (1,775 lines)
-- Dimensional model designed (4 fact tables, 7+ dimensions)
-- Architecture validated (PostgreSQL hot + Snowflake cold)
-- Volume estimates confirmed (5.7M rows/year - manageable)
+**See:** `docs/progress/01_data_collection_pipeline.md` for complete details
 
-✅ **Project Organization**
-- Test scripts organized in `scripts/validation/`
-- Mock data cleaned out
-- Documentation complete
-- Ready for implementation
+✅ **Planning & Validation (Oct 19-22)**
+- API validation: AdMob (daily 13.5K rows) + Adjust (hourly 936 rows)
+- Architecture validated: Everything to Snowflake RAW schema
+- Test requirements mapped: Batch (AdMob) + Incremental (Adjust)
+- Dimensional model designed: 4 fact tables, 7+ dimensions
+- Snowflake connection working: JWT authentication configured
 
----
-
-## Implementation Roadmap (11 Days Remaining)
-
-### Phase 1: Foundation (Days 1-2)
-**Goal:** Get data flowing into Snowflake
-
-1. **Create raw data tables in Snowflake**
-   - `raw_admob_revenue` (CSV uploads for now)
-   - `raw_adjust_acquisition` (CSV uploads for now)
-
-2. **Manual data load**
-   - Fetch 7 days of data using existing scripts
-   - Upload CSVs to Snowflake
-   - Validate data quality
-
-3. **First staging model**
-   - `stg_admob_revenue.sql`
-   - Basic tests (not_null, unique)
-
-### Phase 2: Core Transformations (Days 3-5)
-**Goal:** Build 3-layer dbt project
-
-1. **Staging layer** (all sources)
-   - `stg_admob_revenue.sql`
-   - `stg_adjust_acquisition.sql`
-   - `stg_adjust_cohorts.sql`
-   - Source freshness tests
-
-2. **Intermediate layer** (business logic)
-   - `int_unified_daily_metrics.sql` (join AdMob + Adjust)
-   - Calculated fields (CPI, RPM, ROI)
-
-3. **Mart layer** (analytics-ready)
-   - `mart_app_performance.sql`
-   - `mart_country_performance.sql`
-
-### Phase 3: Advanced Features (Days 6-8)
-**Goal:** Pass test requirements + add value
-
-1. **Incremental models**
-   - Convert staging to incremental
-   - Add `_dbt_loaded_at` timestamps
-
-2. **Custom macros**
-   - `calculate_ltv()` macro
-   - `calculate_roi()` macro
-
-3. **Data quality**
-   - Revenue reconciliation tests
-   - Data freshness checks
-
-### Phase 4: Automation (Days 9-10)
-**Goal:** Complete test requirements
-
-1. **Python pipelines**
-   - `fetch_admob.py` (API to CSV)
-   - `fetch_adjust.py` (API to CSV)
-   - Error handling + logging
-
-2. **Docker PostgreSQL** (optional for extra points)
-   - Docker compose setup
-   - Basic table creation
-
-3. **GitHub Actions**
-   - dbt run + test on PR
-   - Basic CI/CD workflow
-
-### Phase 5: Documentation & Polish (Day 11)
-**Goal:** Deliver complete project
-
-1. **ERD diagram**
-   - Dimensional model visualization
-   - Fact/dimension relationships
-
-2. **Documentation**
-   - Update README with results
-   - Add usage examples
-   - Business value summary
-
-3. **Final testing**
-   - Run full dbt workflow
-   - Validate all tests pass
-   - Check test criteria coverage
+✅ **Architecture Decisions**
+- **Pure RAW:** Python stores exact API responses, dbt does all transformations
+- **Snowflake-only:** Skip PostgreSQL Docker (simpler, industry-standard)
+- **Orchestration:** GitHub Actions scheduled workflows (documented)
 
 ---
 
-## Quick Win Strategy
+## Next: dbt Transformations (40 pts)
 
-**Minimum Viable Product (50+ points):**
-1. Git workflow (5 pts) - Already have
-2. Basic Python pipeline (10 pts) - 1 day
-3. 3-layer dbt models (20 pts) - 2 days
-4. dbt tests (10 pts) - 1 day
-5. GitHub Actions (5 pts) - 1 day
-**Total:** 50 points in 5 days
+### 1. Staging Layer - Clean & Standardize RAW Data
 
-**Target Score (70+ points):**
-Add to MVP:
-- Incremental models (5 pts)
-- Custom macros (5 pts)
-- ERD diagram (5 pts)
-- Data quality tests (5 pts)
-**Total:** 70 points in 8 days
+**`models/staging/stg_admob__daily_performance.sql`:**
+- Convert date string `20251024` → DATE type
+- Divide microsValues by 1,000,000 for dollars
+- Cast string integers → INTEGER type
+- Remove duplicates
 
-**Stretch Goal (80+ points):**
-Add extra features:
-- Docker PostgreSQL (5 pts)
-- Advanced testing (5 pts)
-- Documentation (5 pts)
+**`models/staging/stg_adjust__daily_metrics.sql`:**
+- Aggregate hourly → daily grain (SUM metrics by day, app, country)
+- Rename: `store_id` → `app_id`, `day` → `date`
+- Standardize country codes
+
+**Success Criteria:**
+- [ ] Both staging models created
+- [ ] dbt run completes successfully
+- [ ] Data types correct (DATE, INTEGER, DECIMAL)
 
 ---
 
-## Files Ready to Use
+### 2. Intermediate Layer - Business Logic
 
-**API Scripts (working):**
-- `scripts/validation/test_api_capabilities.py`
-- `scripts/validation/test_adjust_capabilities.py`
+**`models/intermediate/int_daily_unified.sql`:**
+- Join AdMob + Adjust by (app, date, country)
+- Calculate business metrics:
+  - `roas_d0` = ad_revenue / network_cost
+  - `ecpm` = (ad_revenue / ad_impressions) * 1000
+  - `cpi` = network_cost / installs
+  - `impdau_d0` = ad_impressions / daus
+- Left join (keep all AdMob revenue even if Adjust missing)
 
-**Planning Documents:**
-- `docs/planning/data_strategy.md` - Complete architecture
-- `docs/planning/api_validation_results.md` - Test results
-
-**Next File to Create:**
-- `my_dbt_project/models/01_staging/stg_admob_revenue.sql`
-
----
-
-## Key Decisions Made
-
-✅ **Data Sources:** AdMob + Adjust APIs (confirmed working)
-✅ **Granularity:** Daily for both (hourly for Adjust optional)
-✅ **Storage:** Snowflake only for test (PostgreSQL optional extra credit)
-✅ **Dimensions:** app, date, country, platform, ad_format, ad_unit
-✅ **Business Focus:** LTV:CAC, retention, ROI, ad optimization
+**Success Criteria:**
+- [ ] Unified daily metrics table created
+- [ ] Business calculations correct
+- [ ] Joins working properly
 
 ---
 
-## Risk Mitigation
+### 3. Mart Layer - Dimensional Model (Star Schema)
 
-**If running behind:**
-1. Skip PostgreSQL (use Snowflake only)
-2. Skip hourly data (daily only)
-3. Reduce mart models (keep 2-3 core ones)
-4. Simple tests only (not_null, unique)
+**Dimensions:**
+- `models/mart/dim_date.sql` - Calendar table
+- `models/mart/dim_app.sql` - App master list
+- `models/mart/dim_country.sql` - Country reference
 
-**If ahead of schedule:**
-1. Add PostgreSQL + hourly pipeline
-2. Build advanced marts
-3. Add data reconciliation logic
-4. Create business dashboards
+**Facts:**
+- `models/mart/fct_daily_performance.sql` - Main fact table (incremental)
+
+**Incremental Configuration:**
+```sql
+{{ config(
+    materialized='incremental',
+    unique_key=['date', 'app_id', 'country_code']
+) }}
+```
+
+**Success Criteria:**
+- [ ] Star schema with 3+ dimensions, 1+ fact table
+- [ ] Incremental models working (only process new data)
+- [ ] Relationships valid (foreign keys exist)
 
 ---
 
-**Ready to start:** Create first staging model
-**First command:** `cd my_dbt_project && dbt debug`
+### 4. Testing & Quality (10 pts)
+
+**dbt Tests Required:**
+- **Uniqueness:** Primary keys must be unique
+- **Not Null:** Critical columns cannot be null
+- **Relationships:** Foreign keys must exist in dimension tables
+- **Accepted Range:** Metrics within valid ranges
+- **Custom Tests:** Business logic validation
+
+**Target:** 10+ tests minimum
+
+**Success Criteria:**
+- [ ] Tests defined in `models/schema.yml`
+- [ ] dbt test passes all tests
+- [ ] Critical data quality validated
+
+---
+
+### 5. CI/CD Pipeline (5 pts)
+
+**`.github/workflows/dbt_ci.yml`:**
+- Trigger: On pull request
+- Steps: Install dependencies → SQLFluff lint → dbt test
+
+**SQLFluff Configuration (`.sqlfluff`):**
+- Dialect: snowflake
+- Basic SQL style enforcement
+
+**Success Criteria:**
+- [ ] GitHub Actions workflow created
+- [ ] SQLFluff linting passing
+- [ ] dbt tests running in CI
+
+---
+
+### 6. Documentation & ERD (Extra 10 pts)
+
+**ERD Diagram:**
+- Tool: dbdiagram.io or dbt docs
+- Show: Fact/dimension relationships clearly
+
+**dbt Documentation:**
+```bash
+dbt docs generate
+dbt docs serve
+```
+
+**Success Criteria:**
+- [ ] ERD shows dimensional model
+- [ ] dbt docs generated with descriptions
+- [ ] README updated with architecture overview
+
+---
+
+### 7. Demo Preparation
+
+**20-Minute Demo Flow:**
+
+**1. Data Collection (5 min):**
+```bash
+python scripts/collect_admob.py --days 1
+python scripts/collect_adjust.py --hours 1
+python scripts/check_data.py
+```
+
+**2. Transformations (8 min):**
+```bash
+dbt run
+dbt test
+dbt docs serve
+```
+
+**3. CI/CD (4 min):**
+- Show GitHub Actions: PR with passing checks
+- Show tests: Data quality validated
+
+**4. Documentation (3 min):**
+- Show ERD: Dimensional model
+- Show dbt docs: Model descriptions
+
+**Success Criteria:**
+- [ ] Demo runs smoothly in <20 minutes
+- [ ] All test requirements demonstrated
+- [ ] Can explain architecture decisions
+
+---
+
+## Test Score Projection
+
+| Category | Points | Status | Implementation |
+|----------|--------|--------|----------------|
+| **Data Ingestion** | 35 | ✅ Complete | Batch (AdMob) + Incremental (Adjust) |
+| **Transformation** | 40 | 🔄 Next | 3-layer dbt + incremental + tests |
+| **CI/CD** | 5 | ⏳ Pending | GitHub Actions with dbt test |
+| **Extra Features** | 20 | ⏳ Pending | Advanced dbt, custom macros, docs |
+
+**Current:** 35/100 pts
+**Target:** 70+ pts (Pass: 50+)
+**Projected:** 80-85 pts
+
+---
+
+## Files to Create
+
+**dbt Models:**
+1. `models/staging/stg_admob__daily_performance.sql`
+2. `models/staging/stg_adjust__daily_metrics.sql`
+3. `models/intermediate/int_daily_unified.sql`
+4. `models/mart/dim_date.sql`
+5. `models/mart/dim_app.sql`
+6. `models/mart/dim_country.sql`
+7. `models/mart/fct_daily_performance.sql`
+8. `models/schema.yml` - dbt tests + documentation
+
+**CI/CD:**
+9. `.github/workflows/dbt_ci.yml`
+10. `.sqlfluff`
+
+**Documentation:**
+11. ERD diagram
+12. README updates
+
+---
+
+## Quick Commands
+
+**Data Collection:**
+```bash
+python scripts/collect_admob.py --days 7
+python scripts/collect_adjust.py --hours 24
+python scripts/check_data.py
+```
+
+**dbt Workflow:**
+```bash
+dbt debug          # Test connection
+dbt run            # Run all models
+dbt test           # Run all tests
+dbt docs generate  # Generate documentation
+dbt docs serve     # View documentation
+```
+
+**Development:**
+```bash
+dbt run --select stg_admob__daily_performance  # Run one model
+dbt test --select stg_admob__daily_performance # Test one model
+sqlfluff lint models/staging/                   # Lint specific folder
+```
+
+---
+
+**Next Action:** Create `models/staging/stg_admob__daily_performance.sql`

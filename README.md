@@ -41,16 +41,22 @@
 - PostgreSQL: Docker containerization ready for demo
 - See [Test Requirements Mapping](./docs/planning/data_strategy.md#mid-course-test-requirements-mapping) for demo scripts
 
-**Ready For:** Implementation Phase
+**Current Phase:** Data Collection Complete - Ready for dbt Transformations
 
-**Test Requirements Status: 0/100 pts**
+**Test Requirements Status: 35/100 pts**
 
 | Section | Points | Status |
 |---------|--------|--------|
-| **1. Data Ingestion** | 35 | Not started |
-| **2. Transformation** | 40 | Not started |
-| **3. CI/CD** | 5 | Not started |
-| **4. Extra Features** | 20 | Not started |
+| **1. Data Ingestion** | 35 | ✅ Complete (35/35) |
+| **2. Transformation** | 40 | 🔄 Next (dbt staging/intermediate/mart) |
+| **3. CI/CD** | 5 | ⏳ Pending |
+| **4. Extra Features** | 20 | ⏳ Pending |
+
+**Data Collection Status:**
+- ✅ Adjust hourly RAW pipeline working (127K rows/day)
+- ✅ AdMob daily RAW pipeline working (13.5K rows/day)
+- ✅ Pure RAW architecture (no transformations in Python)
+- ✅ All transformations planned for dbt staging layer
 
 ## Quick Commands
 
@@ -58,11 +64,14 @@
 # Activate environment
 source .venv/bin/activate
 
-# Run API validation (already completed)
-python scripts/validation/test_api_capabilities.py
-python scripts/validation/test_adjust_capabilities.py
+# Data collection pipelines
+python scripts/collect_admob.py --days 7     # AdMob batch (94K rows)
+python scripts/collect_adjust.py --hours 24  # Adjust hourly (127K rows)
 
-# dbt workflow (when ready)
+# Validate data in Snowflake
+python scripts/check_data.py
+
+# dbt workflow (next phase)
 cd my_dbt_project
 dbt debug && dbt run && dbt test
 ```

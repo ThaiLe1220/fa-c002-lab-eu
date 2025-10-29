@@ -79,14 +79,14 @@ def check_snowflake_data():
             cursor.execute(f"SELECT COUNT(*) FROM RAW.{table_name}")
             count = cursor.fetchone()[0]
 
-            # Get date range if DATE column exists
+            # Get date range if DATE/DAY column exists
             cursor.execute(
                 f"""
                 SELECT COLUMN_NAME
                 FROM INFORMATION_SCHEMA.COLUMNS
                 WHERE TABLE_SCHEMA = 'RAW'
                 AND TABLE_NAME = '{table_name}'
-                AND COLUMN_NAME IN ('DATE', 'EVENT_DATE', 'CREATED_AT', 'DATE_KEY')
+                AND COLUMN_NAME IN ('DATE', 'DAY', 'EVENT_DATE', 'CREATED_AT', 'DATE_KEY')
             """
             )
             date_col = cursor.fetchone()
@@ -121,8 +121,10 @@ def check_snowflake_data():
                 cols = [row[0] for row in cursor.fetchall()]
 
                 if cols:
-                    col_list = ', '.join(cols[:10])  # First 10 columns
-                    cursor.execute(f"SELECT {col_list} FROM RAW.{table_name} ORDER BY RANDOM() LIMIT 3")
+                    col_list = ", ".join(cols[:10])  # First 10 columns
+                    cursor.execute(
+                        f"SELECT {col_list} FROM RAW.{table_name} ORDER BY RANDOM() LIMIT 3"
+                    )
                     columns = [desc[0] for desc in cursor.description]
                     rows = cursor.fetchall()
 

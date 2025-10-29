@@ -13,94 +13,64 @@ USE SCHEMA RAW;
 -- TABLE 1: ADMOB_DAILY (Batch Pipeline)
 -- ============================================================================
 -- Source: AdMob API (daily granularity)
--- Volume: ~13,500 rows/day
+-- Grain: (date, app_store_id, country_code, platform) - matches Adjust grain
+-- Volume: ~3,000 rows/day (splits by iOS/Android)
 -- Load Pattern: Daily batch loads
 -- ============================================================================
 
 CREATE OR REPLACE TABLE RAW.ADMOB_DAILY (
-    -- API columns (exact from AdMob API - raw values as strings)
-    date VARCHAR(50) NOT NULL,
-    app_id VARCHAR(200) NOT NULL,
-    country_code VARCHAR(100) NOT NULL,
-    platform VARCHAR(50) NOT NULL,
-    ad_format VARCHAR(50) NOT NULL,
-    ad_unit_id VARCHAR(200) NOT NULL,
-    ad_impressions VARCHAR(50),
-    ad_clicks VARCHAR(50),
-    ad_requests VARCHAR(50),
-    matched_requests VARCHAR(50),
-    estimated_earnings VARCHAR(50),  -- Raw microsValue as string
-    observed_ecpm VARCHAR(50),        -- Raw microsValue as string
+    -- API columns (matches Adjust grain)
+    DATE VARCHAR(50) NOT NULL,
+    APP_NAME VARCHAR(200) NOT NULL,
+    APP_STORE_ID VARCHAR(100) NOT NULL,
+    COUNTRY_CODE VARCHAR(100) NOT NULL,
+    PLATFORM VARCHAR(20) NOT NULL,
+    ESTIMATED_EARNINGS VARCHAR(50),  -- Raw microsValue as string
+    AD_IMPRESSIONS VARCHAR(50),
+    AD_CLICKS VARCHAR(50),
+    AD_REQUESTS VARCHAR(50),
+    MATCHED_REQUESTS VARCHAR(50),
+    OBSERVED_ECPM VARCHAR(50),  -- Raw microsValue as string
 
     -- Metadata (added by pipeline)
-    loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
-    batch_id VARCHAR(50),
+    LOADED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
 
-    PRIMARY KEY (date, app_id, country_code, platform, ad_format, ad_unit_id)
+    PRIMARY KEY (DATE, APP_STORE_ID, COUNTRY_CODE, PLATFORM)
 );
 
-COMMENT ON TABLE RAW.ADMOB_DAILY IS 'AdMob daily RAW data - exact API response (flattened)';
+COMMENT ON TABLE RAW.ADMOB_DAILY IS 'AdMob daily RAW data - aggregated at (date, app, country) grain';
 
 -- ============================================================================
--- TABLE 2: ADJUST_HOURLY (Incremental Pipeline)
+-- TABLE 2: ADJUST_DAILY (Incremental Pipeline)
 -- ============================================================================
--- Source: Adjust API (hourly granularity)
--- Volume: ~127K rows/day
--- Load Pattern: Daily loads with hourly grain
+-- Source: Adjust API (daily granularity)
+-- Grain: (day, store_id, country, os_name)
+-- Volume: ~3,706 rows/day (21x reduction from hourly)
+-- Load Pattern: Daily loads with daily grain
 -- ============================================================================
 
-CREATE OR REPLACE TABLE RAW.ADJUST_HOURLY (
-    -- API columns (exact from Adjust CSV API)
-    app VARCHAR(200) NOT NULL,
-    store_id VARCHAR(100) NOT NULL,
-    day DATE NOT NULL,
-    hour TIMESTAMP_NTZ NOT NULL,
-    country VARCHAR(100) NOT NULL,
-    os_name VARCHAR(20) NOT NULL,
-    installs INTEGER,
-    clicks INTEGER,
-    daus DECIMAL(10, 2),
-    ad_revenue DECIMAL(10, 4),
-    ad_impressions INTEGER,
-    ad_revenue_total_d0 DECIMAL(10, 4),
-    ad_impressions_total_d0 INTEGER,
-    network_cost DECIMAL(10, 4),
-    network_cost_diff DECIMAL(10, 4),
+CREATE OR REPLACE TABLE RAW.ADJUST_DAILY (
+    -- API columns (daily grain)
+    APP VARCHAR(200) NOT NULL,
+    STORE_ID VARCHAR(100) NOT NULL,
+    DAY DATE NOT NULL,
+    COUNTRY_CODE VARCHAR(10) NOT NULL,
+    COUNTRY VARCHAR(100) NOT NULL,
+    OS_NAME VARCHAR(20) NOT NULL,
+    INSTALLS INTEGER,
+    CLICKS INTEGER,
+    DAUS DECIMAL(10, 2),
+    AD_REVENUE DECIMAL(10, 4),
+    AD_IMPRESSIONS INTEGER,
+    NETWORK_COST DECIMAL(10, 4),
 
     -- Metadata (added by pipeline)
-    loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    LOADED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
 
-    PRIMARY KEY (hour, app, store_id, country, os_name)
+    PRIMARY KEY (DAY, STORE_ID, COUNTRY_CODE, OS_NAME)
 );
 
-COMMENT ON TABLE RAW.ADJUST_HOURLY IS 'Adjust hourly RAW data - exact API response';
-
--- ============================================================================
--- TABLE 3: ADJUST_COHORTS (Optional - for future use)
--- ============================================================================
--- Source: Adjust API (daily cohort data)
--- Volume: TBD
--- Status: Not implemented yet (bonus feature)
--- ============================================================================
-
-CREATE OR REPLACE TABLE RAW.ADJUST_COHORTS (
-    cohort_date DATE NOT NULL,
-    app_name VARCHAR(200) NOT NULL,
-    store_id VARCHAR(100) NOT NULL,
-    country_code VARCHAR(100) NOT NULL,
-    cohort_size_d0 INTEGER,
-    cohort_size_d1 INTEGER,
-    cohort_size_d7 INTEGER,
-    cohort_size_d30 INTEGER,
-    retention_d1_pct DECIMAL(5, 4),
-    retention_d7_pct DECIMAL(5, 4),
-    retention_d30_pct DECIMAL(5, 4),
-    loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
-
-    PRIMARY KEY (cohort_date, app_name, store_id, country_code)
-);
-
-COMMENT ON TABLE RAW.ADJUST_COHORTS IS 'Adjust cohort retention - for future LTV analysis (optional)';
+COMMENT ON TABLE RAW.ADJUST_DAILY IS 'Adjust daily RAW data - aggregated at (day, store_id, country, os_name) grain';
 
 -- ============================================================================
 -- Verify Tables
@@ -112,5 +82,5 @@ SELECT
     comment
 FROM DB_T34.INFORMATION_SCHEMA.TABLES
 WHERE table_schema = 'RAW'
-  AND table_name IN ('ADMOB_DAILY', 'ADJUST_HOURLY', 'ADJUST_COHORTS')
+  AND table_name IN ('ADMOB_DAILY', 'ADJUST_DAILY')
 ORDER BY table_name;

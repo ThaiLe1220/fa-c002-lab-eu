@@ -109,7 +109,8 @@ def main():
         "[bold cyan]Creating RAW Schema Tables[/bold cyan]\n"
         "Database: DB_T34\n"
         "Schema: RAW\n"
-        "Tables: ADMOB_DAILY, ADJUST_HOURLY, ADJUST_COHORTS",
+        "Tables: ADMOB_DAILY, ADJUST_DAILY\n"
+        "Grain: Aggregated (date, app, country)",
         title="Snowflake Setup"
     ))
 

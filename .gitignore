@@ -218,3 +218,6 @@ __marimo__/
 # Claude Code
 .claude/
 .secret/
+
+# Local data files (historical batches)
+data/

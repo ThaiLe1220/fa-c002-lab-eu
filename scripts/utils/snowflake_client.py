@@ -21,13 +21,13 @@ class SnowflakeClient:
 
     def __init__(
         self,
-        account: str = 'LNB11254',
-        user: str = 'T34',
-        warehouse: str = 'WH_T34',
-        database: str = 'DB_T34',
-        schema: str = 'RAW',
-        role: str = 'RL_T34',
-        private_key_path: str = '/Users/lehongthai/.snowflake/keys/rsa_key.p8'
+        account: str = "LNB11254",
+        user: str = "T34",
+        warehouse: str = "WH_T34",
+        database: str = "DB_T34",
+        schema: str = "RAW",
+        role: str = "RL_T34",
+        private_key_path: str = "/Users/lehongthai/.snowflake/keys/rsa_key.p8",
     ):
         """Initialize Snowflake client with JWT authentication."""
 
@@ -47,17 +47,15 @@ class SnowflakeClient:
             return self.connection
 
         # Load private key
-        with open(self.private_key_path, 'rb') as key_file:
+        with open(self.private_key_path, "rb") as key_file:
             private_key = serialization.load_pem_private_key(
-                key_file.read(),
-                password=None,
-                backend=default_backend()
+                key_file.read(), password=None, backend=default_backend()
             )
 
         pkb = private_key.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
+            encryption_algorithm=serialization.NoEncryption(),
         )
 
         self.connection = snowflake.connector.connect(
@@ -67,10 +65,12 @@ class SnowflakeClient:
             warehouse=self.warehouse,
             database=self.database,
             schema=self.schema,
-            role=self.role
+            role=self.role,
         )
 
-        console.print(f"[green]✓ Connected to Snowflake: {self.database}.{self.schema}[/green]")
+        console.print(
+            f"[green]✓ Connected to Snowflake: {self.database}.{self.schema}[/green]"
+        )
         return self.connection
 
     def close(self):
@@ -85,7 +85,7 @@ class SnowflakeClient:
         df: pd.DataFrame,
         table_name: str,
         chunk_size: int = 16000,
-        auto_create_table: bool = False
+        auto_create_table: bool = False,
     ) -> int:
         """
         Load pandas DataFrame to Snowflake table.
@@ -118,11 +118,14 @@ class SnowflakeClient:
                 database=self.database,
                 chunk_size=chunk_size,
                 auto_create_table=auto_create_table,
-                overwrite=False  # Append mode
+                overwrite=False,  # Append mode
+                use_logical_type=True,  # Fix datetime handling
             )
 
             if success:
-                console.print(f"[green]✓ Loaded {nrows:,} rows in {nchunks} chunks[/green]")
+                console.print(
+                    f"[green]✓ Loaded {nrows:,} rows in {nchunks} chunks[/green]"
+                )
                 return nrows
             else:
                 console.print("[red]✗ Load failed[/red]")
@@ -159,12 +162,10 @@ class SnowflakeClient:
 
         query = f"SELECT COUNT(*) as count FROM {self.schema}.{table_name}"
         df = self.execute_query(query)
-        return int(df['COUNT'].iloc[0])
+        return int(df["COUNT"].iloc[0])
 
     def get_latest_timestamp(
-        self,
-        table_name: str,
-        timestamp_column: str = 'loaded_at'
+        self, table_name: str, timestamp_column: str = "loaded_at"
     ) -> Optional[pd.Timestamp]:
         """
         Get latest timestamp from table for incremental loading.
@@ -184,7 +185,7 @@ class SnowflakeClient:
 
         try:
             df = self.execute_query(query)
-            max_ts = df['MAX_TS'].iloc[0]
+            max_ts = df["MAX_TS"].iloc[0]
             return pd.to_datetime(max_ts) if max_ts else None
         except Exception:
             return None

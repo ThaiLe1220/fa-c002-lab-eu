@@ -34,6 +34,11 @@ jobs:
           echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > ~/.snowflake/keys/rsa_key.p8
           chmod 600 ~/.snowflake/keys/rsa_key.p8
 
+      - name: Debug - Check key file
+        run: |
+          ls -la ~/.snowflake/keys/
+          head -n 1 ~/.snowflake/keys/rsa_key.p8
+
       - name: Install dbt packages
         run: |
           cd my_dbt_project

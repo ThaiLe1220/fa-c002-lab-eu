@@ -28,6 +28,12 @@ jobs:
           mkdir -p ~/.dbt
           echo "${{ secrets.DBT_PROFILES_YML }}" > ~/.dbt/profiles.yml
 
+      - name: Set up Snowflake private key
+        run: |
+          mkdir -p ~/.snowflake/keys
+          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > ~/.snowflake/keys/rsa_key.p8
+          chmod 600 ~/.snowflake/keys/rsa_key.p8
+
       - name: Install dbt packages
         run: |
           cd my_dbt_project

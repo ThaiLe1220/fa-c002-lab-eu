@@ -7,12 +7,14 @@ on:
       - "**.sql"
       - "my_dbt_project/**"
       - ".github/workflows/dbt_ci.yml"
+      - ".sqlfluff"
   pull_request:
     branches: [ main, develop ]
     paths:
       - "**.sql"
       - "my_dbt_project/**"
       - ".github/workflows/dbt_ci.yml"
+      - ".sqlfluff"
 
 jobs:
   dbt-ci:

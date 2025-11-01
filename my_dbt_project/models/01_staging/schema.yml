@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: stg_admob_midtest
+    description: "Staging model for AdMob daily data"
+    columns:
+      - name: raw_record_id
+        description: "Unique record identifier for data lineage"
+        tests:
+          - not_null
+          - unique
+      - name: date
+        tests:
+          - not_null
+      - name: app_store_id
+        tests:
+          - not_null
+      - name: estimated_earnings
+        tests:
+          - not_null
+
+  - name: stg_adjust_midtest
+    description: "Staging model for Adjust daily data"
+    columns:
+      - name: raw_record_id
+        description: "Unique record identifier for data lineage"
+        tests:
+          - not_null
+          - unique
+      - name: date
+        tests:
+          - not_null
+      - name: app_store_id
+        tests:
+          - not_null
+      - name: installs
+        tests:
+          - not_null

@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: int_app_daily_metrics
+    description: "Intermediate model joining AdMob and Adjust data with calculated metrics"
+    columns:
+      - name: app_store_id
+        tests:
+          - not_null
+      - name: date
+        tests:
+          - not_null
+      - name: country_code
+        tests:
+          - not_null
+      - name: ad_revenue
+        description: "Estimated earnings from AdMob"
+      - name: installs
+        description: "Daily installs from Adjust"
+      - name: revenue_per_install
+        description: "Calculated ARPI (Average Revenue Per Install)"

@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: raw_midtest
+    database: db_t34
+    schema: raw_midtest
+    tables:
+      - name: admob_daily_midtest
+      - name: adjust_daily_midtest

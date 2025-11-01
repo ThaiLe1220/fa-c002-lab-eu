@@ -140,11 +140,77 @@ grep -A 2 "generate_surrogate_key" my_dbt_project/models/03_mart/fct_app_daily_p
 docker exec fa-c002-midtest-postgres psql -U midtest_user -d midtest_db -c "SELECT day, store_id, country_code, installs, loaded_at FROM raw.adjust_realtime ORDER BY loaded_at DESC LIMIT 5;"
 ```
 
-**Snowflake (via dbt):**
-```bash
-cd my_dbt_project
-dbt run-operation show_data --args '{model: stg_admob_midtest, limit: 5}'
-cd ..
+**Snowflake - Prove fresh data (UUID uniqueness + timestamp):**
+```sql
+SELECT
+  'ADMOB' as source,
+  COUNT(*) as row_count,
+  COUNT(DISTINCT RAW_RECORD_ID) as unique_ids,
+  MAX(LOADED_AT) as latest
+FROM DB_T34.RAW_MIDTEST.ADMOB_DAILY_MIDTEST
+
+UNION ALL
+
+SELECT
+  'ADJUST' as source,
+  COUNT(*) as row_count,
+  COUNT(DISTINCT RAW_RECORD_ID) as unique_ids,
+  MAX(LOADED_AT) as latest
+FROM DB_T34.RAW_MIDTEST.ADJUST_DAILY_MIDTEST;
+```
+
+**Snowflake - Trace ONE row through all layers (PROOF IT WORKS):**
+```sql
+-- Step 1: Get newest row from raw (copy RAW_RECORD_ID, APP_STORE_ID, DATE)
+SELECT
+  RAW_RECORD_ID,
+  APP_STORE_ID,
+  DATE,
+  AD_IMPRESSIONS,
+  ESTIMATED_EARNINGS,
+  LOADED_AT
+FROM DB_T34.RAW_MIDTEST.ADMOB_DAILY_MIDTEST
+ORDER BY LOADED_AT DESC
+LIMIT 1;
+
+-- Step 2: Find it in staging (paste RAW_RECORD_ID from Step 1)
+SELECT
+  raw_record_id,
+  app_store_id,
+  date,
+  ad_impressions,
+  estimated_earnings,
+  loaded_at
+FROM DB_T34.PUBLIC.STG_ADMOB_MIDTEST
+WHERE raw_record_id = '<paste-uuid-here>';
+
+-- Step 3: Find it in intermediate (paste APP_STORE_ID and DATE from Step 1)
+SELECT
+  app_store_id,
+  date,
+  country_code,
+  ad_impressions,
+  ad_revenue,
+  installs,
+  daus
+FROM DB_T34.PUBLIC.INT_APP_DAILY_METRICS
+WHERE app_store_id = '<paste-app-store-id>'
+  AND date = '<paste-date>';
+
+-- Step 4: Find it in mart (paste APP_STORE_ID and DATE from Step 1)
+SELECT
+  f.performance_key,
+  f.ad_impressions,
+  f.ad_revenue,
+  f.installs,
+  f.ad_ctr,
+  a.app_name,
+  d.date
+FROM DB_T34.PUBLIC.FCT_APP_DAILY_PERFORMANCE f
+JOIN DB_T34.PUBLIC.DIM_APPS a ON f.app_key = a.app_key
+JOIN DB_T34.PUBLIC.DIM_DATES d ON f.date_key = d.date_key
+WHERE a.app_store_id = '<paste-app-store-id>'
+  AND d.date = '<paste-date>';
 ```
 
 ---

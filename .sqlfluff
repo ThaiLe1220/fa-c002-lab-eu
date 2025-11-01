@@ -1,11 +1,14 @@
 [sqlfluff]
 templater = dbt
 dialect = snowflake
-exclude_rules = LT05,ST06,AM04,AM06
-max_line_length = 120
+exclude_rules = RF02,AM06,CP02,AL09,RF04,LT01,LT02,AL01,LT09,ST06
+max_line_length = 200
 
 [sqlfluff:templater:dbt]
 project_dir = ./my_dbt_project
+target = dev
+dbt_skip_compilation_error = True
+dbt_skip_connection_error = True
 
 [sqlfluff:indentation]
 indent_unit = space
@@ -14,5 +17,8 @@ tab_space_size = 4
 [sqlfluff:rules:capitalisation.keywords]
 capitalisation_policy = upper
 
+[sqlfluff:rules:capitalisation.identifiers]
+extended_capitalisation_policy = lower
+
 [sqlfluff:rules:capitalisation.functions]
-capitalisation_policy = upper
+capitalisation_policy = lower

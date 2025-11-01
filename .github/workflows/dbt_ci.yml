@@ -47,7 +47,7 @@ jobs:
                 type: snowflake
                 account: LNB11254
                 user: T34
-                private_key_path: ~/.ssh/snowflake_key.p8
+                private_key_path: /home/runner/.ssh/snowflake_key.p8
                 role: RL_T34
                 warehouse: WH_T34
                 database: DB_T34

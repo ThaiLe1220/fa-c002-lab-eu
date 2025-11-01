@@ -106,49 +106,148 @@ erDiagram
 
 ---
 
-## Table Schemas
+## Schema Evolution by Layer
 
-### Fact Table: `fct_app_daily_performance`
+### RAW LAYER: `DB_T34.RAW_MIDTEST`
+
+```mermaid
+erDiagram
+    ADMOB_DAILY_MIDTEST {
+        varchar RAW_RECORD_ID PK "UUID lineage"
+        varchar BATCH_ID
+        varchar DATE "YYYYMMDD string"
+        varchar APP_STORE_ID
+        varchar COUNTRY_CODE
+        varchar PLATFORM
+        number ESTIMATED_EARNINGS
+        number AD_IMPRESSIONS
+        number AD_CLICKS
+        timestamp LOADED_AT "Fresh data proof"
+    }
+
+    ADJUST_DAILY_MIDTEST {
+        varchar RAW_RECORD_ID PK "UUID lineage"
+        varchar BATCH_ID
+        date DAY
+        varchar STORE_ID
+        varchar COUNTRY_CODE
+        varchar OS_NAME
+        number INSTALLS
+        number CLICKS
+        number DAUS
+        timestamp LOADED_AT "Fresh data proof"
+    }
+```
+
+---
+
+### STAGING LAYER: `DB_T34.PUBLIC` (Views - Clean & Standardize)
+
+```mermaid
+erDiagram
+    stg_admob_midtest {
+        varchar raw_record_id PK "UUID preserved"
+        date date "TO_DATE converted"
+        varchar app_store_id
+        varchar country_code
+        varchar platform
+        integer ad_impressions "Type cast"
+        integer ad_clicks "Type cast"
+        decimal estimated_earnings "Type cast"
+        timestamp loaded_at
+    }
+
+    stg_adjust_midtest {
+        varchar raw_record_id PK "UUID preserved"
+        date date "Standardized"
+        varchar app_store_id "From STORE_ID"
+        varchar country_code
+        varchar platform "From OS_NAME"
+        integer installs "Type cast"
+        integer clicks "Type cast"
+        integer daus "Type cast"
+        timestamp loaded_at
+    }
+```
+
+**Transformations**: Date parsing, column renaming, type casting
+**Tests**: unique(raw_record_id), not_null(raw_record_id, date, app_store_id)
+
+---
+
+### INTERMEDIATE LAYER: `DB_T34.PUBLIC` (Incremental Table - Join & Calculate)
+
+```mermaid
+erDiagram
+    int_app_daily_metrics {
+        varchar app_store_id "COALESCE both"
+        date date "COALESCE both"
+        varchar country_code "COALESCE both"
+        varchar platform "COALESCE both"
+        decimal ad_revenue "From AdMob"
+        integer ad_impressions "From AdMob"
+        integer ad_clicks "From AdMob"
+        integer installs "From Adjust"
+        integer clicks "From Adjust"
+        integer daus "From Adjust"
+        decimal revenue_per_install "Calculated"
+        decimal revenue_per_click "Calculated"
+        timestamp dbt_updated_at
+    }
+```
+
+**Join**: FULL OUTER JOIN stg_admob ⟷ stg_adjust ON (app_store_id, date, country_code)
+**Incremental**: WHERE date > MAX(date)
+**Unique Key**: [app_store_id, date, country_code]
+
+---
+
+### MART LAYER: `DB_T34.PUBLIC` (Star Schema - Analytics Ready)
+
+```mermaid
+erDiagram
+    dim_apps {
+        string app_key PK "MD5 surrogate"
+        string app_store_id
+        string app_name
+    }
+
+    dim_dates {
+        string date_key PK "MD5 surrogate"
+        date date
+        int year
+        int month
+        int day
+        int day_of_week
+        string day_name
+    }
+
+    fct_app_daily_performance {
+        string performance_key PK "MD5 surrogate"
+        string app_key FK
+        string date_key FK
+        string country_code "Degenerate"
+        string platform "Degenerate"
+        decimal ad_revenue
+        int ad_impressions
+        int ad_clicks
+        decimal ad_ctr "Custom macro"
+        int installs
+        int clicks
+        int daus
+        decimal revenue_per_install
+        decimal revenue_per_click
+        timestamp dbt_updated_at
+    }
+
+    dim_apps ||--o{ fct_app_daily_performance : "has many"
+    dim_dates ||--o{ fct_app_daily_performance : "has many"
+```
 
 **Grain**: One row per app per day per country per platform
-
-| Column | Type | Source | Description |
-|--------|------|--------|-------------|
-| performance_key | STRING | Generated | PK - Surrogate key (MD5) |
-| app_key | STRING | dim_apps | FK to apps dimension |
-| date_key | STRING | dim_dates | FK to dates dimension |
-| country_code | STRING | Both | Degenerate dimension |
-| platform | STRING | Both | iOS/Android |
-| ad_revenue | DECIMAL(18,2) | AdMob | Revenue from ads |
-| ad_impressions | INTEGER | AdMob | Ad views |
-| ad_clicks | INTEGER | AdMob | Ad clicks |
-| ad_ctr | DECIMAL(18,2) | Calculated | CTR via calculate_ctr() macro |
-| installs | INTEGER | Adjust | App installs |
-| clicks | INTEGER | Adjust | User clicks |
-| daus | INTEGER | Adjust | Daily active users |
-| revenue_per_install | DECIMAL(18,2) | Calculated | ad_revenue / installs |
-| revenue_per_click | DECIMAL(18,2) | Calculated | ad_revenue / clicks |
-| dbt_updated_at | TIMESTAMP | System | Last transformation time |
-
-### Dimension: `dim_apps`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| app_key | STRING | PK - MD5(app_store_id) |
-| app_store_id | STRING | video.ai.videogenerator |
-| app_name | STRING | Text to Video FLIX |
-
-### Dimension: `dim_dates`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| date_key | STRING | PK - MD5(date) |
-| date | DATE | 2024-10-22 |
-| year | INTEGER | 2024 |
-| month | INTEGER | 10 |
-| day | INTEGER | 22 |
-| day_of_week | INTEGER | 2 (Tuesday) |
-| day_name | STRING | Tuesday |
+**Surrogate Keys**: dbt_utils.generate_surrogate_key (MD5)
+**Custom Macro**: calculate_ctr(clicks, impressions)
+**Tests**: relationships(app_key → dim_apps), relationships(date_key → dim_dates)
 
 ---
 

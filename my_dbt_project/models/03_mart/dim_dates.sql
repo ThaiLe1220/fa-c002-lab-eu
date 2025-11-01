@@ -7,7 +7,7 @@ WITH date_spine AS (
 )
 
 SELECT
-    MD5(date::VARCHAR) AS date_key,
+    {{ dbt_utils.generate_surrogate_key(['date']) }} AS date_key,
     TRY_TO_DATE(date) AS date,
     YEAR(TRY_TO_DATE(date)) AS year,
     MONTH(TRY_TO_DATE(date)) AS month,

@@ -6,17 +6,17 @@ models:
     columns:
       - name: raw_record_id
         description: "Unique record identifier for data lineage"
-        tests:
+        data_tests:
           - not_null
           - unique
       - name: date
-        tests:
+        data_tests:
           - not_null
       - name: app_store_id
-        tests:
+        data_tests:
           - not_null
       - name: estimated_earnings
-        tests:
+        data_tests:
           - not_null
 
   - name: stg_adjust_midtest
@@ -24,15 +24,15 @@ models:
     columns:
       - name: raw_record_id
         description: "Unique record identifier for data lineage"
-        tests:
+        data_tests:
           - not_null
           - unique
       - name: date
-        tests:
+        data_tests:
           - not_null
       - name: app_store_id
-        tests:
+        data_tests:
           - not_null
       - name: installs
-        tests:
+        data_tests:
           - not_null

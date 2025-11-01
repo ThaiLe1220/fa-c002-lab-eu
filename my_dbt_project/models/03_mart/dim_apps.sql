@@ -1,7 +1,7 @@
 {{ config(materialized='table') }}
 
 SELECT DISTINCT
-    MD5(app_store_id) AS app_key,
+    {{ dbt_utils.generate_surrogate_key(['app_store_id']) }} AS app_key,
     app_store_id,
     CASE app_store_id
         WHEN 'video.ai.videogenerator' THEN 'Video AI Generator'

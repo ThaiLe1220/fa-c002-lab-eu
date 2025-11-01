@@ -13,7 +13,7 @@ dates AS (
 )
 
 SELECT
-    MD5(m.app_store_id || m.date::VARCHAR || m.country_code || m.platform) AS performance_key,
+    {{ dbt_utils.generate_surrogate_key(['m.app_store_id', 'm.date', 'm.country_code', 'm.platform']) }} AS performance_key,
     a.app_key,
     d.date_key,
     m.country_code,

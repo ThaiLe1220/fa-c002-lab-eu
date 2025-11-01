@@ -3,8 +3,16 @@ name: dbt CI Pipeline
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - "**.sql"
+      - "my_dbt_project/**"
+      - ".github/workflows/dbt_ci.yml"
   pull_request:
     branches: [ main, develop ]
+    paths:
+      - "**.sql"
+      - "my_dbt_project/**"
+      - ".github/workflows/dbt_ci.yml"
 
 jobs:
   dbt-ci:
@@ -23,39 +31,44 @@ jobs:
         run: |
           pip install dbt-snowflake sqlfluff sqlfluff-templater-dbt
 
+      - name: Set up Snowflake private key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > ~/.ssh/snowflake_key.p8
+          chmod 600 ~/.ssh/snowflake_key.p8
+
       - name: Set up dbt profiles
         run: |
           mkdir -p ~/.dbt
-          echo "${{ secrets.DBT_PROFILES_YML }}" > ~/.dbt/profiles.yml
-
-      - name: Set up Snowflake private key
-        run: |
-          mkdir -p ~/.snowflake/keys
-          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > ~/.snowflake/keys/rsa_key.p8
-          chmod 600 ~/.snowflake/keys/rsa_key.p8
-
-      - name: Debug - Check key file
-        run: |
-          ls -la ~/.snowflake/keys/
-          head -n 1 ~/.snowflake/keys/rsa_key.p8
-
-      - name: Debug - Check profiles.yml
-        run: |
-          cat ~/.dbt/profiles.yml
+          cat > ~/.dbt/profiles.yml <<EOF
+          my_dbt_project:
+            outputs:
+              dev:
+                type: snowflake
+                account: LNB11254
+                user: T34
+                private_key_path: ~/.ssh/snowflake_key.p8
+                role: RL_T34
+                warehouse: WH_T34
+                database: DB_T34
+                schema: PUBLIC
+                threads: 4
+            target: dev
+          EOF
 
       - name: Install dbt packages
         run: |
           cd my_dbt_project
           dbt deps
 
+      - name: Verify dbt connection
+        run: |
+          cd my_dbt_project
+          dbt debug
+
       - name: Run SQLFluff linting
         run: |
           sqlfluff lint my_dbt_project/models --dialect snowflake --templater dbt
-
-      - name: Run dbt models
-        run: |
-          cd my_dbt_project
-          dbt run
 
       - name: Run dbt tests
         run: |

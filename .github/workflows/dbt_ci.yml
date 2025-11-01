@@ -39,6 +39,10 @@ jobs:
           ls -la ~/.snowflake/keys/
           head -n 1 ~/.snowflake/keys/rsa_key.p8
 
+      - name: Debug - Check profiles.yml
+        run: |
+          cat ~/.dbt/profiles.yml
+
       - name: Install dbt packages
         run: |
           cd my_dbt_project

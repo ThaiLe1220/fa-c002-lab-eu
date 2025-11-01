@@ -191,9 +191,9 @@ def fetch_admob_raw(
                                 "app_store_id": app_info.get("appStoreId", ""),
                                 "country_code": dim.get("COUNTRY", {}).get("value"),
                                 "platform": dim.get("PLATFORM", {}).get("value"),
-                                "estimated_earnings": met.get("ESTIMATED_EARNINGS", {}).get(
-                                    "microsValue"
-                                ),
+                                "estimated_earnings": met.get(
+                                    "ESTIMATED_EARNINGS", {}
+                                ).get("microsValue"),
                                 "ad_impressions": met.get("IMPRESSIONS", {}).get(
                                     "integerValue"
                                 ),
@@ -235,10 +235,12 @@ def alter_data(df: pd.DataFrame) -> pd.DataFrame:
     for col in numeric_cols:
         if col in df_altered.columns:
             # Convert to numeric first (handles string values from API)
-            df_altered[col] = pd.to_numeric(df_altered[col], errors='coerce')
+            df_altered[col] = pd.to_numeric(df_altered[col], errors="coerce")
             # Apply random multiplier between 0.5 and 1.5 (±50%)
             df_altered[col] = df_altered[col].apply(
-                lambda x: int(x * random.uniform(0.5, 1.5)) if pd.notna(x) and x != 0 else x
+                lambda x: (
+                    int(x * random.uniform(0.5, 1.5)) if pd.notna(x) and x != 0 else x
+                )
             )
 
     return df_altered
@@ -350,7 +352,9 @@ def load_to_snowflake_realtime(df: pd.DataFrame):
     console.print(
         f"[cyan]Loading {len(df_sample)} rows to ADMOB_DAILY_MIDTEST (REALTIME mode - multithreaded)...[/cyan]"
     )
-    console.print(f"[dim]Using {len(df_sample)} parallel threads with random delays...[/dim]\n")
+    console.print(
+        f"[dim]Using {len(df_sample)} parallel threads with random delays...[/dim]\n"
+    )
 
     client = get_snowflake_client()
 
@@ -386,10 +390,14 @@ def load_to_snowflake_realtime(df: pd.DataFrame):
 
 def main():
     """Main pipeline execution."""
-    parser = argparse.ArgumentParser(description="AdMob Mid-Course Test Data Collection")
+    parser = argparse.ArgumentParser(
+        description="AdMob Mid-Course Test Data Collection"
+    )
 
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--batch", action="store_true", help="Batch mode: Same loaded_at")
+    group.add_argument(
+        "--batch", action="store_true", help="Batch mode: Same loaded_at"
+    )
     group.add_argument(
         "--realtime", action="store_true", help="Realtime mode: Staggered loaded_at"
     )
@@ -398,7 +406,11 @@ def main():
         "--publishers",
         type=str,
         nargs="+",
-        default=["pub-4738062221647171"],
+        default=[
+            "pub-4738062221647171",
+            "pub-3717786786472633",
+            "pub-4109716399396805",
+        ],
         help="Publisher IDs (default: pub-4738062221647171)",
     )
 
@@ -435,7 +447,10 @@ def main():
 
             # Fetch data
             df = fetch_admob_raw(
-                service, publisher_id, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
+                service,
+                publisher_id,
+                start_date.strftime("%Y-%m-%d"),
+                end_date.strftime("%Y-%m-%d"),
             )
 
             if not df.empty:

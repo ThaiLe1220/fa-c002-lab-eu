@@ -8,10 +8,10 @@ WITH date_spine AS (
 
 SELECT
     {{ dbt_utils.generate_surrogate_key(['date']) }} AS date_key,
-    TRY_TO_DATE(date) AS date,
-    YEAR(TRY_TO_DATE(date)) AS year,
-    MONTH(TRY_TO_DATE(date)) AS month,
-    DAY(TRY_TO_DATE(date)) AS day,
-    DAYOFWEEK(TRY_TO_DATE(date)) AS day_of_week,
-    DAYNAME(TRY_TO_DATE(date)) AS day_name
+    date,
+    YEAR(date) AS year,
+    MONTH(date) AS month,
+    DAY(date) AS day,
+    DAYOFWEEK(date) AS day_of_week,
+    DAYNAME(date) AS day_name
 FROM date_spine

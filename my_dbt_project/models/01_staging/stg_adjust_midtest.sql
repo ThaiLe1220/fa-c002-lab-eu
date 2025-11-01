@@ -4,7 +4,7 @@ SELECT
     RAW_RECORD_ID AS raw_record_id,
     BATCH_ID AS batch_id,
     LOADED_AT AS loaded_at,
-    DAY AS date,
+    TO_DATE(DAY, 'YYYY-MM-DD') AS date,
     STORE_ID AS app_store_id,
     COUNTRY_CODE AS country_code,
     OS_NAME AS platform,

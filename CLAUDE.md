@@ -1,50 +1,97 @@
-# FA-C002 Lab
+# Agent Instructions
 
-This is the execution repo for the FA-C002 capstone project. It contains dbt models, data collection scripts, and CI/CD workflows for a mobile analytics data pipeline.
+<role>
+Data Engineering Partner. Help Thai complete the capstone project by building on the existing dbt pipeline. Focus on practical implementation - Kafka, Airflow, AI Agent.
+</role>
 
-The pipeline combines AdMob (ad revenue) and Adjust (user acquisition metrics) data into a star schema in Snowflake. Data volume is around 4K rows daily for each source across all apps.
+<context>
+**Project:** Mobile Analytics Data Pipeline (FA-C002 Lab)
+**Owner:** Thai Le, Ameno Technologies
+**Deadline:** January 24, 2026
+**Goal:** AI chatbot that queries AdMob/Adjust data for executive decision support
 
-## Schema
+**Status:**
+- Phases 0-2: Done (API client, Snowflake, dbt) - Midterm 75/100
+- Phases 3-5: To Do (Kafka, Airflow, AI Agent, Demo)
 
-Raw data lands in `DB_T34.RAW_CAPSTONE` with two tables: `ADJUST_DAILY` and `ADMOB_DAILY`. The dbt models transform this into a star schema in `DB_T34.ANALYTICS`.
+**Schema:**
+- Raw: `DB_T34.RAW_CAPSTONE` (ADJUST_DAILY, ADMOB_DAILY)
+- Mart: `DB_T34.ANALYTICS` (fct_app_daily_performance, dim_apps, dim_dates)
 
-## Quick Commands
+**Business Context:**
+D0 (Day 0) metrics are critical. 70-80% of ad revenue comes from install day.
+- Key metrics: `ad_revenue_d0`, `ad_impressions_d0`, `network_cost`
+- ROAS = ad_revenue / network_cost (target > 1.0)
+- AdMob = source of truth for revenue; Adjust = estimates
+</context>
 
+<priority>
+1. **Phase 4: AI Agent** — Production value, real executive use
+2. **Phase 3: Kafka + Airflow** — Test checkbox, minimal implementation
+3. **Phase 5: Docs + Demo** — Polish for demo
+</priority>
+
+<commands>
 ```bash
-cd my_dbt_project && source ../.venv/bin/activate && dbt build
+# Activate environment
+source .venv/bin/activate
+
+# Data collection
+python scripts/collect_adjust_capstone.py --days 3
+python scripts/collect_admob_capstone.py --days 3
+
+# dbt pipeline (must run from my_dbt_project/)
+cd my_dbt_project && dbt build
 ```
+</commands>
 
-For full command reference, see `docs/quick_start.md`.
+<documentation>
+All docs are self-contained in `docs/`:
 
-## Key Files
+| Doc | Purpose |
+|-----|---------|
+| `PROJECT_PLAN.md` | **Start here** - Phases, tasks, course material references |
+| `ARCHITECTURE.md` | Star schema, data flow, dbt layers |
+| `DATA_SCHEMA.md` | Table schemas, example SQL queries |
+| `DATA_STRATEGY.md` | Business logic, ROAS formulas, metrics |
+| `SETUP.md` | Environment setup, Snowflake RSA |
+| `API_REFERENCE.md` | AdMob/Adjust API capabilities |
+</documentation>
 
-The dbt models live in `my_dbt_project/models/` with three layers:
+<course-materials>
+Base path: `/Users/lehongthai/code_personal/fa-c002-hub/content/`
 
-- **Staging** (`01_staging/`): `stg_adjust_midtest.sql` and `stg_admob_midtest.sql` clean raw data. These will be renamed to remove the "midtest" suffix.
-- **Intermediate** (`02_intermediate/`): `int_app_daily_metrics.sql` joins both sources with a FULL OUTER JOIN and calculates derived metrics.
-- **Mart** (`03_mart/`): `fct_app_daily_performance.sql` is the fact table, with `dim_apps.sql` and `dim_dates.sql` as dimensions.
+**AI Agent (Priority):**
+- `M04/W01/M04W01L03__lab_ai_agents_with_langgraph.md` — Start here
+- `M04/W02/M04W02L03__lab_snowflake_tools.md` — Query tools
+- `M04/W03/M04W03L04__lab_rag_system.md` — RAG system
 
-Collection scripts are in `scripts/` - `collect_adjust_capstone.py` and `collect_admob_capstone.py` fetch from APIs and load to Snowflake.
+**Kafka + Airflow (Checkbox):**
+- `M03/W01/M03W01L03__lab_capstone_kafka_setup.md` — Kafka Docker
+- `M03/W02/M03W02L03__lab_capstone_airflow_setup.md` — Airflow Docker
+- `M03/W03/M03W03L03__lab_capstone_dbt_dag.md` — dbt DAG
 
-## Business Context
+See `docs/PROJECT_PLAN.md` for complete references per component.
+</course-materials>
 
-D0 (Day 0) metrics are critical for this business. Around 70-80% of ad revenue comes from the install day, so tracking D0 revenue and impressions is essential for ROAS (Return on Ad Spend) analysis.
+<notes>
+- dbt commands must run from `my_dbt_project/` directory
+- Staging models have `_midtest` suffix (legacy naming)
+- No IAP revenue tracking (SDK not configured)
+</notes>
 
-Key metrics: `ad_revenue_d0`, `ad_impressions_d0`, `network_cost`, `paid_impressions`, `subscrevnt_revenue`. Target ROAS > 1.0.
+<workflow>
+1. Read `docs/PROJECT_PLAN.md` for current phase and tasks
+2. Check relevant course materials before implementing
+3. Build minimal working version first
+4. Run `dbt test` after any model changes
+5. Update docs when modifying structure
+</workflow>
 
-For full business logic and metric formulas, see `docs/planning/data_strategy.md` or `fa-c002-capstone/docs/DATA_SCHEMA.md`.
+<communication>
+Direct. Implementation-focused. Show code, not explanations.
 
-## Workflow
+When stuck, check course materials first. Web search if materials are missing.
 
-When working here: move fast, write working code, run tests (`dbt test`), and update docs when making changes.
-
-## Reference
-
-Canonical documentation lives in the capstone repo at `fa-c002-capstone/docs/`:
-
-- `CAPSTONE_MVP_PLAN.md` for project phases and timeline
-- `DATA_SCHEMA.md` for schema and metrics
-- `API_CAPABILITIES.md` for API limits and available dimensions
-- `DBT_D0_UPDATE_PLAN.md` for the D0 columns implementation plan
-
-Communication style: direct, show code, skip lengthy explanations unless asked.
+Production value over test checkboxes.
+</communication>

@@ -1,50 +1,49 @@
 # Data Pipeline & Star Schema Architecture
 
+**Schema:** `DB_T34.RAW_CAPSTONE` → `DB_T34.ANALYTICS`
+**Updated:** January 2026
+
+---
+
 ## Complete Data Flow
 
 ```mermaid
 graph TB
     subgraph APIs["DATA SOURCES"]
         AdMob[Google AdMob API<br/>Impressions, Clicks, Revenue]
-        Adjust[Adjust API<br/>Installs, DAUs, Sessions]
+        Adjust[Adjust API<br/>Installs, DAUs, D0 Metrics, Costs]
     end
 
-    subgraph Python["PYTHON COLLECTION - BOTH HAVE BATCH & REALTIME"]
-        AdMobBatch[collect_admob_midtest.py --batch<br/>Same timestamp for all rows]
-        AdMobRT[collect_admob_midtest.py --realtime<br/>Staggered timestamps, multithreaded]
-        AdjustBatch[collect_adjust_midtest.py --batch<br/>Same timestamp for all rows]
-        AdjustRT[collect_adjust_midtest.py --realtime<br/>Staggered timestamps, multithreaded]
+    subgraph Python["PYTHON COLLECTION"]
+        AdMobCollect[collect_admob_capstone.py<br/>Daily batch collection]
+        AdjustCollect[collect_adjust_capstone.py<br/>Daily batch collection]
     end
 
-    subgraph Raw["SNOWFLAKE RAW LAYER - DB_T34.RAW_MIDTEST"]
-        AdMobRaw[(ADMOB_DAILY_MIDTEST<br/>RAW_RECORD_ID UUID<br/>LOADED_AT timestamp)]
-        AdjustRaw[(ADJUST_DAILY_MIDTEST<br/>RAW_RECORD_ID UUID<br/>LOADED_AT timestamp)]
+    subgraph Raw["SNOWFLAKE RAW LAYER - DB_T34.RAW_CAPSTONE"]
+        AdMobRaw[(ADMOB_DAILY<br/>RAW_RECORD_ID UUID<br/>LOADED_AT timestamp)]
+        AdjustRaw[(ADJUST_DAILY<br/>RAW_RECORD_ID UUID<br/>D0 metrics, costs)]
     end
 
-    subgraph Staging["DBT LAYER 1: STAGING - DB_T34.PUBLIC"]
-        AdMobStg[stg_admob_midtest VIEW<br/>Clean, Standardize Types<br/>Tests: unique, not_null]
-        AdjustStg[stg_adjust_midtest VIEW<br/>Clean, Standardize Types<br/>Tests: unique, not_null]
+    subgraph Staging["DBT LAYER 1: STAGING - DB_T34.ANALYTICS"]
+        AdMobStg[stg_admob VIEW<br/>Clean, Standardize Types<br/>Tests: unique, not_null]
+        AdjustStg[stg_adjust VIEW<br/>Clean, Standardize Types<br/>D0 metrics pass-through]
     end
 
-    subgraph Intermediate["DBT LAYER 2: INTERMEDIATE - DB_T34.PUBLIC"]
-        IntMetrics[int_app_daily_metrics<br/>INCREMENTAL TABLE<br/>FULL OUTER JOIN<br/>Calculate Metrics]
+    subgraph Intermediate["DBT LAYER 2: INTERMEDIATE - DB_T34.ANALYTICS"]
+        IntMetrics[int_app_daily_metrics<br/>INCREMENTAL TABLE<br/>FULL OUTER JOIN<br/>D0 + Cost metrics]
     end
 
-    subgraph Mart["DBT LAYER 3: STAR SCHEMA - DB_T34.PUBLIC"]
+    subgraph Mart["DBT LAYER 3: STAR SCHEMA - DB_T34.ANALYTICS"]
         DimApps[dim_apps TABLE<br/>App Dimension]
         DimDates[dim_dates TABLE<br/>Date Dimension]
-        Fact[fct_app_daily_performance TABLE<br/>Fact Table - All Metrics<br/>Custom Macro: calculate_ctr]
+        Fact[fct_app_daily_performance TABLE<br/>Fact Table - All Metrics<br/>D0, ROAS, Revenue]
     end
 
-    AdMob --> AdMobBatch
-    AdMob --> AdMobRT
-    Adjust --> AdjustBatch
-    Adjust --> AdjustRT
+    AdMob --> AdMobCollect
+    Adjust --> AdjustCollect
 
-    AdMobBatch --> AdMobRaw
-    AdMobRT --> AdMobRaw
-    AdjustBatch --> AdjustRaw
-    AdjustRT --> AdjustRaw
+    AdMobCollect --> AdMobRaw
+    AdjustCollect --> AdjustRaw
 
     AdMobRaw --> AdMobStg
     AdjustRaw --> AdjustStg
@@ -98,6 +97,13 @@ erDiagram
         int installs "From Adjust"
         int clicks "From Adjust"
         int daus "From Adjust"
+        decimal ad_revenue_d0 "D0 revenue - critical"
+        int ad_impressions_d0 "D0 impressions"
+        decimal d0_revenue_pct "Calculated: d0/total"
+        decimal network_cost "Marketing spend"
+        int paid_impressions "Paid UA impressions"
+        decimal subscrevnt_revenue "Subscription revenue"
+        decimal total_revenue "Calculated: ad + subs"
         decimal revenue_per_install "Calculated"
         decimal revenue_per_click "Calculated"
         timestamp dbt_updated_at
@@ -108,11 +114,11 @@ erDiagram
 
 ## Schema Evolution by Layer
 
-### RAW LAYER: `DB_T34.RAW_MIDTEST`
+### RAW LAYER: `DB_T34.RAW_CAPSTONE`
 
 ```mermaid
 erDiagram
-    ADMOB_DAILY_MIDTEST {
+    ADMOB_DAILY {
         varchar RAW_RECORD_ID PK "UUID lineage"
         varchar BATCH_ID
         varchar DATE "YYYYMMDD string"
@@ -125,7 +131,7 @@ erDiagram
         timestamp LOADED_AT "Fresh data proof"
     }
 
-    ADJUST_DAILY_MIDTEST {
+    ADJUST_DAILY {
         varchar RAW_RECORD_ID PK "UUID lineage"
         varchar BATCH_ID
         date DAY
@@ -135,17 +141,24 @@ erDiagram
         number INSTALLS
         number CLICKS
         number DAUS
+        number AD_REVENUE
+        number AD_IMPRESSIONS
+        number AD_REVENUE_TOTAL_D0 "D0 revenue"
+        number AD_IMPRESSIONS_TOTAL_D0 "D0 impressions"
+        number NETWORK_COST "Marketing spend"
+        number PAID_IMPRESSIONS "Paid UA impressions"
+        number SUBSCREVNT_REVENUE "Subscription revenue"
         timestamp LOADED_AT "Fresh data proof"
     }
 ```
 
 ---
 
-### STAGING LAYER: `DB_T34.PUBLIC` (Views - Clean & Standardize)
+### STAGING LAYER: `DB_T34.ANALYTICS` (Views - Clean & Standardize)
 
 ```mermaid
 erDiagram
-    stg_admob_midtest {
+    stg_admob {
         varchar raw_record_id PK "UUID preserved"
         date date "TO_DATE converted"
         varchar app_store_id
@@ -157,7 +170,7 @@ erDiagram
         timestamp loaded_at
     }
 
-    stg_adjust_midtest {
+    stg_adjust {
         varchar raw_record_id PK "UUID preserved"
         date date "Standardized"
         varchar app_store_id "From STORE_ID"
@@ -166,6 +179,13 @@ erDiagram
         integer installs "Type cast"
         integer clicks "Type cast"
         integer daus "Type cast"
+        decimal ad_revenue "Type cast"
+        integer ad_impressions "Type cast"
+        decimal ad_revenue_d0 "From AD_REVENUE_TOTAL_D0"
+        integer ad_impressions_d0 "From AD_IMPRESSIONS_TOTAL_D0"
+        decimal network_cost "Type cast"
+        integer paid_impressions "Type cast"
+        decimal subscrevnt_revenue "Type cast"
         timestamp loaded_at
     }
 ```
@@ -175,7 +195,7 @@ erDiagram
 
 ---
 
-### INTERMEDIATE LAYER: `DB_T34.PUBLIC` (Incremental Table - Join & Calculate)
+### INTERMEDIATE LAYER: `DB_T34.ANALYTICS` (Incremental Table - Join & Calculate)
 
 ```mermaid
 erDiagram
@@ -190,19 +210,24 @@ erDiagram
         integer installs "From Adjust"
         integer clicks "From Adjust"
         integer daus "From Adjust"
+        decimal ad_revenue_d0 "From Adjust"
+        integer ad_impressions_d0 "From Adjust"
+        decimal network_cost "From Adjust"
+        integer paid_impressions "From Adjust"
+        decimal subscrevnt_revenue "From Adjust"
         decimal revenue_per_install "Calculated"
         decimal revenue_per_click "Calculated"
         timestamp dbt_updated_at
     }
 ```
 
-**Join**: FULL OUTER JOIN stg_admob ⟷ stg_adjust ON (app_store_id, date, country_code)
+**Join**: FULL OUTER JOIN stg_admob ⟷ stg_adjust ON (app_store_id, date, country_code, platform)
 **Incremental**: WHERE date > MAX(date)
-**Unique Key**: [app_store_id, date, country_code]
+**Unique Key**: [app_store_id, date, country_code, platform]
 
 ---
 
-### MART LAYER: `DB_T34.PUBLIC` (Star Schema - Analytics Ready)
+### MART LAYER: `DB_T34.ANALYTICS` (Star Schema - Analytics Ready)
 
 ```mermaid
 erDiagram
@@ -235,6 +260,13 @@ erDiagram
         int installs
         int clicks
         int daus
+        decimal ad_revenue_d0 "D0 revenue"
+        int ad_impressions_d0 "D0 impressions"
+        decimal d0_revenue_pct "ad_revenue_d0 / ad_revenue"
+        decimal network_cost "Marketing spend"
+        int paid_impressions "Paid UA"
+        decimal subscrevnt_revenue "Subscription"
+        decimal total_revenue "ad_revenue + subscrevnt_revenue"
         decimal revenue_per_install
         decimal revenue_per_click
         timestamp dbt_updated_at
@@ -251,21 +283,36 @@ erDiagram
 
 ---
 
-## Transformation Layers
+## Transformation Layers Summary
 
 | Layer | Models | Materialization | Purpose |
 |-------|--------|-----------------|---------|
-| **Staging** | stg_admob_midtest<br/>stg_adjust_midtest | VIEW | Clean, standardize types, preserve UUID |
-| **Intermediate** | int_app_daily_metrics | INCREMENTAL TABLE | FULL OUTER JOIN, calculate metrics |
-| **Mart** | dim_apps<br/>dim_dates<br/>fct_app_daily_performance | TABLE | Star schema for analytics |
+| **Staging** | stg_admob, stg_adjust | VIEW | Clean, standardize types, preserve UUID |
+| **Intermediate** | int_app_daily_metrics | INCREMENTAL TABLE | FULL OUTER JOIN, combine sources |
+| **Mart** | dim_apps, dim_dates, fct_app_daily_performance | TABLE | Star schema for analytics |
 
 ---
 
 ## Key Features
 
-- **Data Collection**: Both AdMob & Adjust have --batch and --realtime modes
-- **Data Quality**: 27 tests (unique, not_null, relationships)
+- **D0 Metrics**: Day 0 revenue/impressions for ROAS calculation (70-80% of revenue from install day)
+- **Cost Tracking**: network_cost for ROI analysis
+- **Revenue Streams**: ad_revenue + subscrevnt_revenue = total_revenue
+- **Data Quality**: Tests for unique, not_null, relationships
 - **Data Lineage**: UUID tracking from raw → staging
-- **Performance**: Incremental materialization
-- **Custom Logic**: calculate_ctr() macro
-- **Star Schema**: Optimized for Snowflake analytics
+- **Performance**: Incremental materialization for efficiency
+- **Custom Logic**: calculate_ctr() macro, d0_revenue_pct calculation
+- **Star Schema**: Optimized for Snowflake analytics and AI Agent queries
+
+---
+
+## Key Metrics
+
+| Metric | Formula | Business Use |
+|--------|---------|--------------|
+| **ROAS** | ad_revenue / network_cost | Return on ad spend |
+| **D0 Revenue %** | ad_revenue_d0 / ad_revenue | Same-day payback |
+| **eCPM** | (ad_revenue / ad_impressions) * 1000 | Ad efficiency |
+| **CPI** | network_cost / installs | Cost per install |
+| **ARPDAU** | ad_revenue / daus | Revenue per active user |
+| **Total Revenue** | ad_revenue + subscrevnt_revenue | Full revenue picture |

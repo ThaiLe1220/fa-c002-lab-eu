@@ -1,61 +1,52 @@
 # Quick Start - Copy & Paste Commands
 
-**For someone starting from scratch**
+**Daily workflow commands for FA-C002 capstone development**
 
 ---
 
-## Complete Setup (Copy All At Once)
+## Activate Environment
 
 ```bash
-# Navigate to project directory
 cd /Users/lehongthai/code_personal/fa-c002-lab
-
-# Initialize project with uv
-uv init --bare
-echo "# FA-C002 Lab - dbt Learning Project" > README.md
-
-# Initialize Git
-git init
-git branch -m main
-curl -s https://raw.githubusercontent.com/github/gitignore/main/Python.gitignore -o .gitignore
-
-# Create Python virtual environment
-uv venv --seed
-
-# Install dbt
-uv add dbt-core dbt-snowflake
-
-# Initialize dbt project
 source .venv/bin/activate
-dbt init my_dbt_project --skip-profile-setup
-
-# Create model folder structure
-cd my_dbt_project
-rm -rf models/example
-mkdir -p models/01_staging models/02_intermediate models/03_mart
-
-# Create docs directory
-cd ..
-mkdir -p docs
-
-# Verify everything
-echo "✅ Setup complete!"
-ls -la
 ```
 
 ---
 
-## Daily Workflow
+## Data Collection (Capstone)
 
-### Start Working
 ```bash
-cd /Users/lehongthai/code_personal/fa-c002-lab/my_dbt_project
-source ../.venv/bin/activate
+# Collect last 3 days from Adjust API → RAW_CAPSTONE.ADJUST_DAILY
+python scripts/collect_adjust_capstone.py --days 3
+
+# Collect last 3 days from AdMob API → RAW_CAPSTONE.ADMOB_DAILY
+python scripts/collect_admob_capstone.py --days 3
 ```
 
-### Run dbt Commands
+---
+
+## dbt Pipeline
+
+### Run All Models
+
 ```bash
-dbt debug           # Test connection
+cd my_dbt_project && source ../.venv/bin/activate
+dbt run --select staging      # Clean raw data
+dbt run --select intermediate # Join sources
+dbt run --select mart         # Build star schema
+dbt test                      # Run all tests
+```
+
+### One-Liner (Full Build)
+
+```bash
+cd /Users/lehongthai/code_personal/fa-c002-lab/my_dbt_project && source ../.venv/bin/activate && dbt build
+```
+
+### Common Commands
+
+```bash
+dbt debug           # Test Snowflake connection
 dbt run             # Run all models
 dbt test            # Run all tests
 dbt docs generate   # Generate docs
@@ -64,82 +55,74 @@ dbt docs serve      # View docs in browser
 
 ---
 
-## One-Line Commands
-
-### Activate environment and test connection
-```bash
-cd /Users/lehongthai/code_personal/fa-c002-lab/my_dbt_project && source ../.venv/bin/activate && dbt debug
-```
-
-### Run all models and tests
-```bash
-cd /Users/lehongthai/code_personal/fa-c002-lab/my_dbt_project && source ../.venv/bin/activate && dbt run && dbt test
-```
-
-### Generate and serve documentation
-```bash
-cd /Users/lehongthai/code_personal/fa-c002-lab/my_dbt_project && source ../.venv/bin/activate && dbt docs generate && dbt docs serve
-```
-
----
-
-## Environment Variables (For Snowflake)
-
-Create a `.env` file in the project root:
-
-```bash
-# .env file
-export SNOWFLAKE_ACCOUNT="your-account"
-export SNOWFLAKE_USER="your-username"
-export SNOWFLAKE_PASSWORD="your-password"
-export SNOWFLAKE_ROLE="your-role"
-export SNOWFLAKE_DATABASE="your-database"
-export SNOWFLAKE_WAREHOUSE="your-warehouse"
-export SNOWFLAKE_SCHEMA="your-schema"
-```
-
-Load environment variables:
-```bash
-source .env
-```
-
----
-
 ## Git Workflow
 
-### Initial commit
+### Create Feature Branch
+
 ```bash
-cd /Users/lehongthai/code_personal/fa-c002-lab
-git add .
-git commit -m "Initial dbt project setup"
+git checkout -b feature/your-feature-name
 ```
 
-### Regular commits
+### Regular Commits
+
 ```bash
 git add .
-git commit -m "Add staging models"
+git commit -m "feat: Description of change"
+git push origin feature/your-feature-name
+```
+
+### Create PR and Merge
+
+```bash
+# After PR is approved on GitHub
+git checkout main
+git pull origin main
+git merge feature/your-feature-name
 git push origin main
 ```
 
----
-
-## Troubleshooting One-Liners
-
-### Reset virtual environment
-```bash
-cd /Users/lehongthai/code_personal/fa-c002-lab && rm -rf .venv && uv venv --seed && uv add dbt-core dbt-snowflake
-```
-
-### Check if dbt is working
-```bash
-source /Users/lehongthai/code_personal/fa-c002-lab/.venv/bin/activate && dbt --version
-```
-
-### View project structure
-```bash
-cd /Users/lehongthai/code_personal/fa-c002-lab && tree -L 3 -I '.venv|.git' || find . -maxdepth 3 -not -path '*/\.venv/*' -not -path '*/\.git/*'
-```
+**Test Requirement:** Need 2+ branches, 1+ merged PR, 3+ meaningful commits
 
 ---
 
-**Tip:** Save these commands in a text file for easy reference!
+## Troubleshooting
+
+### Reset Virtual Environment
+
+```bash
+cd /Users/lehongthai/code_personal/fa-c002-lab
+rm -rf .venv
+uv venv --seed
+uv add dbt-core dbt-snowflake snowflake-connector-python
+```
+
+### Check dbt Version
+
+```bash
+source /Users/lehongthai/code_personal/fa-c002-lab/.venv/bin/activate
+dbt --version
+```
+
+### View Project Structure
+
+```bash
+cd /Users/lehongthai/code_personal/fa-c002-lab
+tree -L 3 -I '.venv|.git' || find . -maxdepth 3 -not -path '*/\.venv/*' -not -path '*/\.git/*'
+```
+
+### Test Snowflake Connection
+
+```bash
+cd my_dbt_project && source ../.venv/bin/activate && dbt debug
+```
+
+---
+
+## Reference
+
+| Resource | Location |
+|----------|----------|
+| Environment setup | `docs/00_setup_guide.md` |
+| Snowflake RSA setup | `docs/snowflake_setup.md` |
+| Data schema | `fa-c002-capstone/docs/DATA_SCHEMA.md` |
+| Business context | `docs/planning/data_strategy.md` |

@@ -1,6 +1,7 @@
-yo# API Capability Validation Results
+# API Capability Validation Results
 
-**Date:** October 19, 2025
+**Original:** October 19, 2025
+**Updated:** January 2026 (Confirmed still valid)
 **Purpose:** Validate data availability before building data warehouse
 
 ---
@@ -296,13 +297,31 @@ AdMob API (daily) → Snowflake only → Revenue analysis
 
 ---
 
+## Additional Metrics Validated (January 2026)
+
+**Adjust API - Confirmed Available:**
+
+- `ad_revenue_total_D0` - Day 0 ad revenue (critical for ROAS - 70-80% of total)
+- `ad_impressions_total_D0` - Day 0 ad impressions
+- `network_cost` - Marketing spend for ROI analysis
+- `paid_impressions` - Paid UA impression count
+- `subscrevnt_revenue` - Subscription event revenue
+
+**Collection Script:** `scripts/collect_adjust_capstone.py`
+
+**Schema:** `DB_T34.RAW_CAPSTONE.ADJUST_DAILY`
+
+---
+
 ## Next Steps
 
 1. ✅ **Validation Complete** - All APIs tested, capabilities confirmed
-2. ⏭️ **Update data_strategy.md** - Revise architecture with validated findings
-3. ⏭️ **Design dimensional model** - Finalize fact/dimension tables
-4. ⏭️ **Implement pipelines** - Build data ingestion (hourly for Adjust, daily for AdMob)
-5. ⏭️ **Setup infrastructure** - PostgreSQL (hot) + Snowflake (cold)
+2. ✅ **Update data_strategy.md** - Revised architecture with validated findings
+3. ✅ **Design dimensional model** - Fact/dimension tables finalized (see `docs/ERD_STAR_SCHEMA.md`)
+4. ✅ **Implement pipelines** - Data ingestion complete (daily batch for both)
+5. ✅ **Setup infrastructure** - Snowflake warehouse operational
+
+> **Midterm completed Nov 2025 (75/100). Capstone adds AI Agent + Kafka/Airflow.**
 
 ---
 

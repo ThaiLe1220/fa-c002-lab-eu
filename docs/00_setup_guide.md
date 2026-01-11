@@ -1,6 +1,8 @@
 # Setup Reference
 
-Quick technical reference for project setup.
+Technical reference for project setup and configuration.
+
+**Schema:** `DB_T34.RAW_CAPSTONE` (raw) → `DB_T34.ANALYTICS` (mart)
 
 ## Environment Setup
 
@@ -60,7 +62,11 @@ my_dbt_project:
 # Activate
 cd my_dbt_project && source ../.venv/bin/activate
 
-# Run
+# Data collection (from project root)
+python scripts/collect_adjust_capstone.py --days 3
+python scripts/collect_admob_capstone.py --days 3
+
+# dbt pipeline
 dbt debug    # Test connection
 dbt run      # Execute models
 dbt test     # Run tests
@@ -86,3 +92,16 @@ git merge feature/data-pipelines
 ```
 
 **Test Requirement:** Need 2+ branches, 1+ merged PR, 3+ meaningful commits
+
+---
+
+## Key Metrics Reference
+
+The pipeline tracks these metrics from Adjust API:
+
+- `ad_revenue`, `ad_impressions` - Core ad performance
+- `ad_revenue_total_D0`, `ad_impressions_total_D0` - Day 0 metrics (critical for ROAS)
+- `network_cost` - Marketing spend
+- `paid_impressions`, `subscrevnt_revenue` - Additional revenue streams
+
+For full metric definitions, see `docs/planning/data_strategy.md`.

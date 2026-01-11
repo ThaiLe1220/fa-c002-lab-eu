@@ -1,116 +1,50 @@
-# FA-C002-LAB Project Instructions
+# FA-C002 Lab
 
-## Project Philosophy
+This is the execution repo for the FA-C002 capstone project. It contains dbt models, data collection scripts, and CI/CD workflows for a mobile analytics data pipeline.
 
-**Core Principles:**
+The pipeline combines AdMob (ad revenue) and Adjust (user acquisition metrics) data into a star schema in Snowflake. Data volume is around 4K rows daily for each source across all apps.
 
-- **Lean & Concise**: No verbose explanations, no theoretical fluff
-- **Technical Focus**: Direct, practical, implementation-focused
-- **Test-Driven**: Every decision maps to mid-course test criteria
-- **Business Analysis Ready**: Data modeling focused on real business questions
-- **Ship Working Code**: Functional over perfect, iterate based on feedback
+## Schema
 
-## Documentation Standards
+Raw data lands in `DB_T34.RAW_CAPSTONE` with two tables: `ADJUST_DAILY` and `ADMOB_DAILY`. The dbt models transform this into a star schema in `DB_T34.ANALYTICS`.
 
-**What Belongs in Docs:**
+## Quick Commands
 
-- Technical specifications
-- Configuration details
-- Command references
-- Test criteria mappings
+```bash
+cd my_dbt_project && source ../.venv/bin/activate && dbt build
+```
 
-**What Doesn't:**
+For full command reference, see `docs/quick_start.md`.
 
-- Long-form tutorials (user learns by doing)
-- Theoretical explanations (user understands fundamentals)
-- Step-by-step guides (user can replicate)
-- Verbose setup instructions (basics mastered)
+## Key Files
 
-**Writing Style:**
+The dbt models live in `my_dbt_project/models/` with three layers:
 
-- Bullet points over paragraphs
-- Code over prose
-- Commands over explanations
-- Technical notes only, no fluff
+- **Staging** (`01_staging/`): `stg_adjust_midtest.sql` and `stg_admob_midtest.sql` clean raw data. These will be renamed to remove the "midtest" suffix.
+- **Intermediate** (`02_intermediate/`): `int_app_daily_metrics.sql` joins both sources with a FULL OUTER JOIN and calculates derived metrics.
+- **Mart** (`03_mart/`): `fct_app_daily_performance.sql` is the fact table, with `dim_apps.sql` and `dim_dates.sql` as dimensions.
 
-## Mid-Course Test Requirements
+Collection scripts are in `scripts/` - `collect_adjust_capstone.py` and `collect_admob_capstone.py` fetch from APIs and load to Snowflake.
 
-**Component Breakdown:**
+## Business Context
 
-1. **Data Ingestion (35 pts)**: Git workflow + Python pipelines + Docker PostgreSQL
-2. **Transformation (40 pts)**: Multi-layer dbt models + incremental + custom macros + ERD
-3. **CI/CD (5 pts)**: GitHub Actions with automated checks
-4. **Extra Features (20 pts)**: Optional advanced implementations
+D0 (Day 0) metrics are critical for this business. Around 70-80% of ad revenue comes from the install day, so tracking D0 revenue and impressions is essential for ROAS (Return on Ad Spend) analysis.
 
-**Success Criteria:** 70+ points (pass: 50+)
+Key metrics: `ad_revenue_d0`, `ad_impressions_d0`, `network_cost`, `paid_impressions`, `subscrevnt_revenue`. Target ROAS > 1.0.
 
-**Full Details:** See `docs/goal/midcourse_test_criteria.md`
+For full business logic and metric formulas, see `docs/planning/data_strategy.md` or `fa-c002-capstone/docs/DATA_SCHEMA.md`.
 
-## Code Style Preferences
+## Workflow
 
-**Python:**
+When working here: move fast, write working code, run tests (`dbt test`), and update docs when making changes.
 
-- Type hints where useful
-- Error handling without verbosity
-- Functional over OOP for simple scripts
-- Clear variable names, minimal comments
+## Reference
 
-**SQL/dbt:**
+Canonical documentation lives in the capstone repo at `fa-c002-capstone/docs/`:
 
-- Clean, readable transformations
-- Business logic in intermediate layer
-- Marts for final analytics
-- Tests co-located with models
+- `CAPSTONE_MVP_PLAN.md` for project phases and timeline
+- `DATA_SCHEMA.md` for schema and metrics
+- `API_CAPABILITIES.md` for API limits and available dimensions
+- `DBT_D0_UPDATE_PLAN.md` for the D0 columns implementation plan
 
-**Git:**
-
-- Meaningful commit messages
-- Feature branches for all work
-- PRs with technical context only
-- Keep history clean
-
-## Data Modeling Strategy
-
-**Approach:**
-
-- Multi-entity models (facts + dimensions)
-- Dimensional modeling (star schema)
-- Three-layer architecture (staging → intermediate → mart)
-- Analytics-ready for business questions
-
-**Business Analysis Focus:**
-
-- Revenue analysis
-- Customer segmentation
-- Product performance
-- Time-series trends
-
-## Communication Preferences
-
-**When Working with Claude:**
-
-**Do:**
-
-- Show code, not explanations
-- Provide technical specs, not tutorials
-- Give direct answers, not background
-- Focus on implementation steps, not theory
-
-**Don't:**
-
-- Explain basics already understood
-- Provide verbose documentation
-- Write long-form educational content
-- Repeat information unnecessarily
-
-## Tech Stack
-
-- **dbt**: SQL transformations + testing
-- **Snowflake**: Cloud data warehouse
-- **Python**: Pipeline scripts
-- **Docker**: PostgreSQL containerization
-- **GitHub Actions**: CI/CD automation
-
----
-
-**Philosophy:** Ship working code, pass the test, build for real analysis. Everything else is noise.
+Communication style: direct, show code, skip lengthy explanations unless asked.

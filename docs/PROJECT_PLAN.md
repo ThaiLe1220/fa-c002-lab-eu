@@ -14,8 +14,9 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 |-------|-------------|--------|--------|
 | Phase 0 | API Client + CSV | Done | - |
 | Phase 1-2 | Snowflake + dbt | Done | 30 |
+| Phase 2.5 | dbt Migration (D0 metrics) | **Next** | - |
 | Phase 3 | Kafka + Airflow | To Do | 15 |
-| Phase 4 | AI Agent + RAG | **Priority** | 20 |
+| Phase 4 | AI Agent + RAG | Priority | 20 |
 | Phase 5 | Docs + Demo | To Do | 10 |
 
 **Midterm:** 75/100 | **Final Test:** January 24, 2026
@@ -27,6 +28,39 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 ```
 /Users/lehongthai/code_personal/fa-c002-hub/content
 ```
+
+---
+
+## Phase 2.5: dbt Migration (PREREQUISITE)
+
+**Must complete before AI Agent.** Current dbt models use old `RAW_MIDTEST` schema without D0 metrics.
+
+### Tasks
+
+1. **Create staging models for RAW_CAPSTONE**
+   - [ ] `stg_admob_capstone.sql` → RAW_CAPSTONE.ADMOB_DAILY
+   - [ ] `stg_adjust_capstone.sql` → RAW_CAPSTONE.ADJUST_DAILY (with D0 columns)
+
+2. **Update intermediate model**
+   - [ ] Add: ad_revenue_d0, ad_impressions_d0, network_cost, paid_impressions, subscrevnt_revenue
+   - [ ] Point to new staging models
+
+3. **Update fact table**
+   - [ ] Add D0 metrics columns
+   - [ ] Add calculated: d0_revenue_pct, roas
+
+4. **Validate**
+   - [ ] `dbt build` passes
+   - [ ] `dbt test` passes
+   - [ ] Query fact table, verify D0 data exists
+
+5. **Cleanup docs**
+   - [ ] Remove "Migration Status" section from DATA_SCHEMA.md
+   - [ ] Update this phase status to "Done"
+
+See `docs/DATA_SCHEMA.md` → Migration Status for column details.
+
+**Note:** Docs already describe target state. Complete code migration first, then cleanup docs.
 
 ---
 

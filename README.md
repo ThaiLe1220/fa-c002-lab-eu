@@ -14,8 +14,9 @@ End-to-end data platform transforming real mobile app revenue data (AdMob + Adju
 |-------|-------------|--------|--------|
 | Phase 0 | API Client + CSV | Done | - |
 | Phase 1-2 | Snowflake + dbt | Done | 30 |
+| Phase 2.5 | dbt Migration (D0 metrics) | **Next** | - |
 | Phase 3 | Kafka + Airflow | To Do | 15 |
-| Phase 4 | AI Agent + RAG | **Priority** | 20 |
+| Phase 4 | AI Agent + RAG | Priority | 20 |
 | Phase 5 | Docs + Demo | To Do | 10 |
 
 **Midterm:** 75/100 | **Final Test:** January 24, 2026
@@ -102,14 +103,14 @@ fa-c002-lab/
 
 ## Documentation
 
-| Doc | Purpose |
-|-----|---------|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Star schema, data flow diagrams |
-| [DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | Table schemas, example queries |
-| [SETUP.md](docs/SETUP.md) | Environment and Snowflake setup |
-| [PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | Capstone phases, demo checklist |
-| [DATA_STRATEGY.md](docs/DATA_STRATEGY.md) | Business logic, ROAS formulas |
-| [API_REFERENCE.md](docs/API_REFERENCE.md) | AdMob and Adjust API capabilities |
+| # | Doc | Purpose |
+|---|-----|---------|
+| 1 | [PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | **Start here.** Phases, status, course material references |
+| 2 | [DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | Tables, schemas, example SQL queries |
+| 3 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Star schema, dbt layers, data flow |
+| 4 | [API_REFERENCE.md](docs/API_REFERENCE.md) | AdMob/Adjust API capabilities and limits |
+| 5 | [DATA_STRATEGY.md](docs/DATA_STRATEGY.md) | Business logic, ROAS formulas, metrics |
+| 6 | [SETUP.md](docs/SETUP.md) | Environment setup (reference when needed) |
 
 ## Tech Stack
 

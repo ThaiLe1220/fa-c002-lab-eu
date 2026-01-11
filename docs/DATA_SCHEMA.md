@@ -1,5 +1,42 @@
 # Data Schema
 
+## Migration Status
+
+**Current:** dbt models use `RAW_MIDTEST` schema (midterm)
+**Target:** dbt models use `RAW_CAPSTONE` schema with D0 metrics
+
+### What's Missing
+
+| Column | Source | Status |
+|--------|--------|--------|
+| ad_revenue_d0 | Adjust API | In RAW_CAPSTONE, not in dbt |
+| ad_impressions_d0 | Adjust API | In RAW_CAPSTONE, not in dbt |
+| network_cost | Adjust API | In RAW_CAPSTONE, not in dbt |
+| paid_impressions | Adjust API | In RAW_CAPSTONE, not in dbt |
+| subscrevnt_revenue | Adjust API | In RAW_CAPSTONE, not in dbt |
+
+### Migration Steps
+
+1. **Create new staging models** pointing to RAW_CAPSTONE
+   - `stg_admob_capstone.sql` → RAW_CAPSTONE.ADMOB_DAILY
+   - `stg_adjust_capstone.sql` → RAW_CAPSTONE.ADJUST_DAILY
+
+2. **Update intermediate model** to include new columns
+   - Add D0 metrics from Adjust
+   - Add network_cost, paid_impressions, subscrevnt_revenue
+
+3. **Update fact table** with calculated fields
+   - d0_revenue_pct = ad_revenue_d0 / ad_revenue
+   - roas = ad_revenue / network_cost
+
+4. **Run dbt build** and verify data flows correctly
+
+5. **Deprecate midtest models** (keep for reference)
+
+**Prerequisite for:** AI Agent integration (Phase 4)
+
+---
+
 ## CSV File Formats
 
 ### AdMob CSV

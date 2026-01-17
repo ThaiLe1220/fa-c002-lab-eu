@@ -1,5 +1,29 @@
 # Setup Guide
 
+```mermaid
+graph LR
+    subgraph "1. Environment"
+        PYTHON[Python 3.11+]
+        UV[uv venv]
+        DEPS[Dependencies]
+    end
+
+    subgraph "2. Snowflake"
+        RSA[RSA Keys]
+        PROFILE[dbt Profile]
+        TEST[dbt debug]
+    end
+
+    subgraph "3. Ready"
+        COLLECT[Data Collection]
+        DBT[dbt build]
+    end
+
+    PYTHON --> UV --> DEPS
+    DEPS --> RSA --> PROFILE --> TEST
+    TEST --> COLLECT --> DBT
+```
+
 ## Prerequisites
 
 - Python 3.11+

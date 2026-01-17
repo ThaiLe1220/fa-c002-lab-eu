@@ -1,4 +1,39 @@
-# Capstone Project Plan
+# Project Plan
+
+What to do, in what order, and current status.
+
+```mermaid
+graph LR
+    subgraph "Done"
+        P0[Phase 0<br/>API + CSV]
+        P1[Phase 1-2<br/>Snowflake + dbt]
+    end
+
+    subgraph "Current"
+        P25[Phase 2.5<br/>dbt Migration]
+    end
+
+    subgraph "To Do"
+        P4[Phase 4<br/>AI Agent]
+        P3[Phase 3<br/>Kafka + Airflow]
+        P5[Phase 5<br/>Demo]
+    end
+
+    P0 --> P1 --> P25 --> P4
+    P25 --> P3
+    P4 --> P5
+    P3 --> P5
+
+    style P25 fill:#ffeb3b
+    style P4 fill:#4caf50,color:#fff
+```
+
+**Related docs:**
+- `AI_AGENT_SPEC.md` - Who uses the system and what they need
+- `DASHBOARD_SPEC.md` - What to build (dashboards, agent capabilities)
+- `ARCHITECTURE.md` - How the system works technically
+
+---
 
 ## Goal
 
@@ -6,11 +41,12 @@
 
 AI chatbot that queries real AdMob/Adjust data to answer business questions for executives without SQL knowledge.
 
-**Primary User:** Chị Linh (Business Performance Controller) - See `AI_AGENT_SPEC.md` for detailed user context.
+**Primary User:** Chi Linh (Business Performance Controller)
+**Deadline:** January 24, 2026
 
 ---
 
-## System Architecture Overview
+## System Architecture
 
 **Three Independent Systems → One Agent**
 
@@ -31,7 +67,7 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 └───────────────┘   └───────────────┘   └───────────────┘
 ```
 
-**Key Insight:** Kafka and RAG are independent checkbox items. They don't need to integrate with the main batch flow. Use fake/fabricated data. The agent ties them together at demo time.
+**Key:** Kafka and RAG are independent checkbox items. Use fake/fabricated data. Agent ties them together at demo.
 
 ---
 
@@ -41,12 +77,12 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 |-------|-------------|--------|--------|
 | Phase 0 | API Client + CSV | Done | - |
 | Phase 1-2 | Snowflake + dbt | Done | 30 |
-| Phase 2.5 | dbt Migration (D0 metrics) | **Next** | - |
+| Phase 2.5 | dbt Migration (D0 metrics) | **NEXT** | - |
 | Phase 3 | Kafka + Airflow (checkbox) | To Do | 15 |
 | Phase 4 | AI Agent | Priority | 20 |
 | Phase 5 | Docs + Demo | To Do | 10 |
 
-**Midterm:** 75/100 | **Final Test:** January 24, 2026
+**Midterm:** 75/100 | **Final:** January 24, 2026 | **Target:** 80+ points
 
 ---
 
@@ -66,60 +102,59 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 
 ---
 
-## Phase 2.5: dbt Migration (PREREQUISITE)
+## Phase 2.5: dbt Migration
 
-**Must complete before AI Agent.** Current dbt models use old `RAW_MIDTEST` schema.
+**Prerequisite for AI Agent. Must complete first.**
 
-### Tasks
+### Checklist
 
-1. **Create staging models for RAW_CAPSTONE**
-   - [ ] `stg_admob_capstone.sql` → RAW_CAPSTONE.ADMOB_DAILY
-   - [ ] `stg_adjust_capstone.sql` → RAW_CAPSTONE.ADJUST_DAILY
+- [ ] Create `stg_admob_capstone.sql` → RAW_CAPSTONE.ADMOB_DAILY
+- [ ] Create `stg_adjust_capstone.sql` → RAW_CAPSTONE.ADJUST_DAILY
+- [ ] Update `int_app_daily_metrics.sql`:
+  - [ ] Add ad_revenue_d0, ad_impressions_d0
+  - [ ] Add network_cost, paid_impressions, subscrevnt_revenue
+  - [ ] Point to new staging models
+- [ ] Update `fct_app_daily_performance.sql`:
+  - [ ] Add D0 metrics columns
+  - [ ] Add d0_revenue_pct calculation
+- [ ] Run `dbt build` - all models pass
+- [ ] Run `dbt test` - all tests pass
+- [ ] Query fact table - verify D0 data exists
 
-2. **Update intermediate model**
-   - [ ] Add: ad_revenue_d0, ad_impressions_d0, network_cost, paid_impressions, subscrevnt_revenue
-   - [ ] Point to new staging models
-
-3. **Update fact table**
-   - [ ] Add D0 metrics columns
-   - [ ] Add calculated: d0_revenue_pct
-
-4. **Validate**
-   - [ ] `dbt build` passes
-   - [ ] `dbt test` passes
-   - [ ] Query fact table, verify D0 data exists
-
-### Architecture Decisions
+### Decision Log
 
 | Decision | Choice | Reasoning |
 |----------|--------|-----------|
-| Schema | Star + flat view | Industry standard + AI Agent convenience |
-| Layers | 3 (staging/int/mart) | Clear separation, good debugging |
-| Materialization | Keep incremental | Required by grading rubric |
-| Metrics | Raw in table, aggregate at query | Flexibility for different aggregation levels |
-
-See `ARCHITECTURE.md` for detailed technical documentation.
+| Schema | Star + fact table | Industry standard, good for analytics |
+| Layers | 3 (staging/int/mart) | Clear separation, debuggable |
+| Materialization | Keep incremental | Required by grading |
+| Metrics | Raw in table, aggregate at query | Flexibility for different levels |
 
 ---
 
-## Phase 3: Kafka + Airflow (CHECKBOX)
+## Phase 3: Kafka + Airflow (Checkbox)
 
 **Minimal implementation. Independent from main flow.**
 
-### Kafka (Streaming Checkbox)
+### Kafka Checklist
 
-- Local Docker setup
-- Fake data producer (simulated metrics)
-- Consumer that stores to local DB or prints
-- Agent tool to query "latest streaming data"
+- [ ] `kafka/docker-compose.yml` - Kafka + Zookeeper
+- [ ] `kafka/producer.py` - Generate fake metrics
+- [ ] `kafka/consumer.py` - Read and print/store
+- [ ] Test: Producer sends, consumer receives
+- [ ] `agent/tools/kafka_tools.py` - Query latest data
 
 **NOT required:** Push to Snowflake, integrate with batch flow
 
-### Airflow (Orchestration Checkbox)
+### Airflow Checklist
 
-- Local Docker setup
-- 3 tasks minimum: collect → dbt run → dbt test
-- Scheduled daily
+- [ ] Docker setup for Airflow
+- [ ] `dags/dbt_pipeline.py` with 3 tasks:
+  - [ ] collect data (or skip if manual)
+  - [ ] dbt run
+  - [ ] dbt test
+- [ ] Schedule daily
+- [ ] Test: DAG runs successfully
 
 ### Course Materials
 
@@ -132,50 +167,41 @@ See `ARCHITECTURE.md` for detailed technical documentation.
 
 ---
 
-## Phase 4: AI Agent (PRIORITY)
+## Phase 4: AI Agent (Priority)
 
 **This is where business value and extra points come from.**
 
 ### System 1: Batch Data Querying (Core - 10 pts)
 
-Agent queries Snowflake fact table for business metrics.
+- [ ] `agent/tools/snowflake_tools.py`:
+  - [ ] query_metrics - Execute SQL on fact table
+  - [ ] compare_periods - Compare two time ranges
+  - [ ] drill_down - Breakdown by dimension
+- [ ] Test: Answer chi Linh's 10 questions accurately
 
-**Tools to build:**
-- `query_revenue` - Revenue by app/country/date
-- `query_roas` - ROAS calculations
-- `query_comparison` - Compare periods/apps/countries
+### System 2: RAG Documents (Checkbox - 5 pts)
 
-**Success:** Answer chị Linh's questions accurately.
+- [ ] `agent/rag/document_loader.py` - Load PDFs
+- [ ] `agent/rag/vector_store.py` - Embed with Chroma/FAISS
+- [ ] `agent/tools/rag_tools.py` - Retrieval tool
+- [ ] Test: Query a document, get relevant answer
 
-### System 2: RAG Document Query (Checkbox - 5 pts)
+### System 3: Streaming (Checkbox - 5 pts)
 
-Agent answers questions from PDF documents.
+- [ ] `agent/tools/kafka_tools.py` - Query latest Kafka data
+- [ ] Test: Agent returns latest streaming metric
 
-**Minimal setup:**
-- Any PDF (business docs, metric definitions)
-- Local vector store (Chroma/FAISS)
-- Retrieval tool
+### Agent Orchestration (Extra Points)
 
-**NOT required:** Complex chunking, production RAG
+- [ ] `agent/agent.py` - LangGraph state graph
+- [ ] System prompt with:
+  - [ ] Metric definitions
+  - [ ] Chi Linh's thresholds
+  - [ ] Drill-down hierarchy
+- [ ] Memory for conversation context
+- [ ] `agent/app.py` - Streamlit UI
 
-### System 3: Streaming Query (Checkbox - 5 pts)
-
-Agent queries "real-time" data from Kafka.
-
-**Minimal setup:**
-- Query latest message from Kafka topic
-- Return fake metric data
-- Show it works
-
-### Agent Orchestration (Extra Points - up to 40 pts)
-
-**Where we shine:**
-- Business context (chị Linh's workflow, decision framework)
-- Memory (conversation context)
-- Multi-tool orchestration
-- Intelligent responses (WHY + WHAT TO DO)
-
-See `AI_AGENT_SPEC.md` for detailed requirements.
+See `DASHBOARD_SPEC.md` for detailed capabilities and phases.
 
 ### Course Materials
 
@@ -190,18 +216,16 @@ See `AI_AGENT_SPEC.md` for detailed requirements.
 
 ## Phase 5: Documentation & Demo
 
-### Required Docs
+### Checklist
 
 - [ ] README.md with architecture diagram
 - [ ] Clear setup instructions
-- [ ] Demo script
+- [ ] Demo script with scenarios
 
-### Demo Checklist
+### Demo Must Show
 
-Must demonstrate live:
-
-- [ ] Kafka producer running (show streaming)
-- [ ] Airflow DAG execution (show dbt run)
+- [ ] Kafka producer running (streaming)
+- [ ] Airflow DAG execution (dbt run)
 - [ ] GitHub Actions passing
 - [ ] Agent with conversation memory
 - [ ] RAG document query
@@ -210,56 +234,34 @@ Must demonstrate live:
 
 ---
 
-## Target Directory Structure
+## Priority Order
 
-```
-fa-c002-lab/
-├── agent/                    # AI Agent (Phase 4)
-│   ├── agent.py              # LangGraph agent
-│   ├── tools/
-│   │   ├── snowflake_tools.py
-│   │   ├── kafka_tools.py
-│   │   └── rag_tools.py
-│   ├── prompts/
-│   │   └── system_prompt.py
-│   └── app.py                # Streamlit UI
-├── kafka/                    # Streaming (Phase 3 - independent)
-│   ├── docker-compose.yml
-│   ├── producer.py
-│   └── consumer.py
-├── dags/                     # Airflow (Phase 3)
-│   └── dbt_pipeline.py
-├── my_dbt_project/           # dbt (Phase 2.5)
-│   └── models/
-│       ├── 01_staging/
-│       ├── 02_intermediate/
-│       └── 03_mart/
-├── scripts/                  # Data collection (Done)
-└── docs/                     # Documentation
-    ├── PROJECT_PLAN.md       # This file
-    ├── AI_AGENT_SPEC.md      # User context, requirements
-    ├── ARCHITECTURE.md       # Technical architecture
-    ├── DATA_SCHEMA.md        # Snowflake schemas
-    ├── DATA_STRATEGY.md      # Metric formulas
-    └── ...
+1. **Phase 2.5 (dbt migration)** - Prerequisite, do first
+2. **Phase 4 (AI Agent)** - Business value + extra points
+3. **Phase 3 (Kafka + Airflow)** - Checkbox, minimal
+4. **Phase 5 (Docs + Demo)** - Polish
+
+---
+
+## Quick Commands
+
+```bash
+# Activate environment
+cd /Users/lehongthai/code_personal/fa-c002-lab
+source .venv/bin/activate
+
+# Data collection
+python scripts/collect_adjust_capstone.py --days 3
+python scripts/collect_admob_capstone.py --days 3
+
+# dbt pipeline
+cd my_dbt_project && dbt build
 ```
 
 ---
 
-## Quick Reference
+## Revision History
 
-**Priority order:**
-1. Phase 2.5 (dbt migration) - Prerequisite
-2. Phase 4 (AI Agent) - Business value + extra points
-3. Phase 3 (Kafka + Airflow) - Checkbox
-4. Phase 5 (Docs + Demo) - Polish
-
-**Key docs:**
-- `AI_AGENT_SPEC.md` - Who is the user, what do they need
-- `DATA_STRATEGY.md` - How to calculate metrics
-- `ARCHITECTURE.md` - How the system works
-
-**Course materials base:**
-```
-/Users/lehongthai/code_personal/fa-c002-hub/content/
-```
+| Date | Change |
+|------|--------|
+| Jan 2026 | Added execution checklists, restructured phases |

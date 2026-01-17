@@ -1,5 +1,52 @@
 # Architecture
 
+How the system works technically.
+
+```mermaid
+graph TB
+    subgraph "Data Sources"
+        ADMOB[AdMob API]
+        ADJUST[Adjust API]
+    end
+
+    subgraph "System 1: Batch (Core)"
+        RAW[(RAW_CAPSTONE)]
+        DBT[dbt Transform]
+        MART[(ANALYTICS)]
+    end
+
+    subgraph "System 2: Streaming"
+        KAFKA[Kafka]
+    end
+
+    subgraph "System 3: RAG"
+        DOCS[PDF Docs]
+        VECTOR[(Vector Store)]
+    end
+
+    subgraph "AI Agent"
+        AGENT[LangGraph Agent]
+        UI[Streamlit UI]
+    end
+
+    ADMOB --> RAW
+    ADJUST --> RAW
+    RAW --> DBT --> MART
+    MART --> AGENT
+    KAFKA --> AGENT
+    DOCS --> VECTOR --> AGENT
+    AGENT --> UI
+
+    style MART fill:#4caf50,color:#fff
+    style AGENT fill:#2196f3,color:#fff
+```
+
+**Related docs:**
+- `DATA_SCHEMA.md` - Table schemas and SQL examples
+- `METRICS.md` - Metric calculation formulas
+
+---
+
 ## System Overview
 
 **Three Independent Systems → One Agent**
@@ -20,16 +67,16 @@
 │   SYSTEM 1    │   │   SYSTEM 2    │   │   SYSTEM 3    │
 │  Batch Data   │   │  Streaming    │   │  Documents    │
 ├───────────────┤   ├───────────────┤   ├───────────────┤
-│ Real AdMob/   │   │ Fake metrics  │   │ Any PDF       │
-│ Adjust data   │   │ Local Kafka   │   │ Vector store  │
-│ Snowflake     │   │ Docker        │   │ Chroma/FAISS  │
-│ dbt transform │   │               │   │               │
+│ Real AdMob/   │   │ Simulated     │   │ PDF docs      │
+│ Adjust data   │   │ metrics       │   │ Vector store  │
+│ Snowflake     │   │ Local Kafka   │   │ Chroma/FAISS  │
+│ dbt transform │   │ Docker        │   │               │
 │               │   │               │   │               │
 │ CORE VALUE    │   │ CHECKBOX      │   │ CHECKBOX      │
 └───────────────┘   └───────────────┘   └───────────────┘
 ```
 
-**Key Point:** Systems 2 and 3 are independent. They don't integrate with System 1. The agent queries each separately.
+**Key Point:** Systems 2 and 3 are independent checkboxes. They don't integrate with System 1. Agent queries each separately.
 
 ---
 
@@ -65,23 +112,14 @@ PYTHON COLLECTION           SNOWFLAKE RAW              DBT TRANSFORMATION       
 ├──────────────┤    │ country_code                         ││ │    ├──────────────┤
 │ app_key (PK) │◀───│ platform                             ││ │───▶│ date_key (PK)│
 │ app_store_id │    │                                      ││ │    │ date         │
-│ app_name     │    │ -- Raw Metrics --                    ││ │    │ year         │
-└──────────────┘    │ ad_revenue                           ││ │    │ month        │
-                    │ ad_impressions                       ││ │    │ day          │
-                    │ ad_clicks                            ││ │    │ day_of_week  │
-                    │ installs                             ││ │    │ day_name     │
-                    │ clicks                               ││ │    └──────────────┘
-                    │ daus                                 ││ │
-                    │ network_cost                         ││ │
-                    │ ad_revenue_d0                        ││ │
-                    │ ad_impressions_d0                    ││ │
-                    │ paid_impressions                     ││ │
-                    │ subscrevnt_revenue                   ││ │
-                    │                                      ││ │
-                    │ -- Calculated --                     ││ │
-                    │ ad_ctr                               ││ │
-                    │ d0_revenue_pct                       │└─┘
-                    │ dbt_updated_at                       │
+│ app_name     │    │ -- Raw Metrics --                    ││ │    │ year, month  │
+└──────────────┘    │ ad_revenue, ad_impressions           ││ │    │ day_of_week  │
+                    │ installs, daus, network_cost         ││ │    └──────────────┘
+                    │ ad_revenue_d0, ad_impressions_d0     ││ │
+                    │ paid_impressions, subscrevnt_revenue │└─┘
+                    │                                      │
+                    │ -- Calculated --                     │
+                    │ ad_ctr, d0_revenue_pct               │
                     └─────────────────────────────────────────┘
 ```
 
@@ -100,20 +138,16 @@ PYTHON COLLECTION           SNOWFLAKE RAW              DBT TRANSFORMATION       
 
 ### Metrics Strategy
 
-**Stored in fact table (raw):**
+**Stored in fact table (raw values):**
 - ad_revenue, ad_impressions, ad_clicks
 - installs, clicks, daus
 - network_cost, ad_revenue_d0, ad_impressions_d0
 - paid_impressions, subscrevnt_revenue
 
-**Calculated at query time (aggregate):**
-```sql
-d0_roas = SUM(ad_revenue_d0) / NULLIF(SUM(network_cost), 0)
-cpi = SUM(network_cost) / NULLIF(SUM(installs), 0)
-ecpm = SUM(ad_revenue) * 1000 / NULLIF(SUM(ad_impressions), 0)
-```
+**Calculated at query time:**
+- d0_roas, cpi, ecpm, impdau (see METRICS.md)
 
-See `DATA_STRATEGY.md` for complete metric formulas.
+**Rationale:** Store raw values, calculate aggregates at query time for flexibility.
 
 ---
 
@@ -136,16 +170,20 @@ See `DATA_STRATEGY.md` for complete metric formulas.
 
 ### Purpose
 
-- Demonstrate streaming capability
+- Demonstrate streaming capability for grading
 - Independent from batch pipeline
-- Uses fabricated/simulated data
+- Uses simulated/fake data
 
 ### Components
 
-- `kafka/docker-compose.yml` - Kafka + Zookeeper
-- `kafka/producer.py` - Generate fake metrics
-- `kafka/consumer.py` - Read and store
-- `agent/tools/kafka_tools.py` - Agent queries latest
+| Component | Location | Description |
+|-----------|----------|-------------|
+| Docker setup | `kafka/docker-compose.yml` | Kafka + Zookeeper |
+| Producer | `kafka/producer.py` | Generate fake metrics |
+| Consumer | `kafka/consumer.py` | Read and store |
+| Agent tool | `agent/tools/kafka_tools.py` | Query latest data |
+
+**NOT required:** Push to Snowflake, integrate with batch flow
 
 ---
 
@@ -168,75 +206,94 @@ See `DATA_STRATEGY.md` for complete metric formulas.
 
 ### Purpose
 
-- Demonstrate RAG capability
+- Demonstrate RAG capability for grading
 - Answer questions about documents
 - Independent from data pipeline
 
 ### Components
 
-- `agent/rag/document_loader.py` - Load and chunk PDFs
-- `agent/rag/vector_store.py` - Embed and store
-- `agent/tools/rag_tools.py` - Agent retrieval tool
+| Component | Location | Description |
+|-----------|----------|-------------|
+| Loader | `agent/rag/document_loader.py` | Load and chunk PDFs |
+| Vector store | `agent/rag/vector_store.py` | Embed and store |
+| Agent tool | `agent/tools/rag_tools.py` | Retrieval tool |
+
+**NOT required:** Complex chunking, production RAG
 
 ---
 
-## Raw Layer Schema
+## Agent Architecture
 
-### ADMOB_DAILY (RAW_CAPSTONE)
+### LangGraph Structure
 
-```sql
-CREATE TABLE RAW_CAPSTONE.ADMOB_DAILY (
-    RAW_RECORD_ID VARCHAR PRIMARY KEY,
-    BATCH_ID VARCHAR,
-    DATE VARCHAR,
-    APP_STORE_ID VARCHAR,
-    APP_NAME VARCHAR,
-    COUNTRY_CODE VARCHAR,
-    PLATFORM VARCHAR,
-    ESTIMATED_EARNINGS NUMBER,
-    AD_IMPRESSIONS NUMBER,
-    AD_CLICKS NUMBER,
-    AD_REQUESTS NUMBER,
-    MATCHED_REQUESTS NUMBER,
-    OBSERVED_ECPM NUMBER,
-    LOADED_AT TIMESTAMP
-);
+```
+┌─────────────────────────────────────────────────┐
+│                   AGENT                         │
+│  ┌───────────────────────────────────────────┐  │
+│  │              State Graph                   │  │
+│  │  ┌─────────┐    ┌─────────┐    ┌────────┐ │  │
+│  │  │ Receive │───▶│ Think   │───▶│ Act    │ │  │
+│  │  │ Query   │    │ (LLM)   │    │ (Tool) │ │  │
+│  │  └─────────┘    └─────────┘    └────────┘ │  │
+│  └───────────────────────────────────────────┘  │
+│                                                 │
+│  ┌───────────────────────────────────────────┐  │
+│  │              Tools                         │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐  │  │
+│  │  │Snowflake │ │ Kafka    │ │ RAG      │  │  │
+│  │  │ Query    │ │ Query    │ │ Query    │  │  │
+│  │  └──────────┘ └──────────┘ └──────────┘  │  │
+│  └───────────────────────────────────────────┘  │
+│                                                 │
+│  ┌───────────────────────────────────────────┐  │
+│  │              Memory                        │  │
+│  │  Conversation history + Business context   │  │
+│  └───────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────┘
 ```
 
-### ADJUST_DAILY (RAW_CAPSTONE)
+### Tools
 
-```sql
-CREATE TABLE RAW_CAPSTONE.ADJUST_DAILY (
-    RAW_RECORD_ID VARCHAR PRIMARY KEY,
-    BATCH_ID VARCHAR,
-    DAY DATE,
-    STORE_ID VARCHAR,
-    APP VARCHAR,
-    COUNTRY_CODE VARCHAR,
-    OS_NAME VARCHAR,
-    INSTALLS NUMBER,
-    CLICKS NUMBER,
-    DAUS NUMBER,
-    AD_REVENUE NUMBER,
-    AD_IMPRESSIONS NUMBER,
-    AD_REVENUE_TOTAL_D0 NUMBER,
-    AD_IMPRESSIONS_TOTAL_D0 NUMBER,
-    NETWORK_COST NUMBER,
-    PAID_IMPRESSIONS NUMBER,
-    SUBSCREVNT_REVENUE NUMBER,
-    LOADED_AT TIMESTAMP
-);
-```
+| Tool | System | Description |
+|------|--------|-------------|
+| query_metrics | Batch | Execute SQL on fact table |
+| compare_periods | Batch | Compare two time ranges |
+| drill_down | Batch | Breakdown by dimension |
+| query_streaming | Streaming | Get latest Kafka data |
+| query_documents | RAG | Search vector store |
 
 ---
 
-## Data Volume
+## Project Structure
 
-| Table | Daily Volume | Monthly |
-|-------|--------------|---------|
-| ADMOB_DAILY | ~1,500 rows | ~45K rows |
-| ADJUST_DAILY | ~4,000 rows | ~120K rows |
-| fct_app_daily_performance | ~4,000 rows | ~120K rows |
+```
+fa-c002-lab/
+├── agent/                    # AI Agent
+│   ├── agent.py              # LangGraph agent
+│   ├── app.py                # Streamlit UI
+│   ├── tools/
+│   │   ├── snowflake_tools.py
+│   │   ├── kafka_tools.py
+│   │   └── rag_tools.py
+│   └── rag/
+│       ├── document_loader.py
+│       └── vector_store.py
+├── kafka/                    # Streaming (checkbox)
+│   ├── docker-compose.yml
+│   ├── producer.py
+│   └── consumer.py
+├── dags/                     # Airflow
+│   └── dbt_pipeline.py
+├── my_dbt_project/           # dbt models
+│   └── models/
+│       ├── 01_staging/
+│       ├── 02_intermediate/
+│       └── 03_mart/
+├── scripts/                  # Data collection
+│   ├── collect_adjust_capstone.py
+│   └── collect_admob_capstone.py
+└── docs/                     # Documentation
+```
 
 ---
 
@@ -247,5 +304,14 @@ CREATE TABLE RAW_CAPSTONE.ADJUST_DAILY (
 | Star schema | Yes | Industry standard, good for analytics |
 | 3 dbt layers | Yes | Clear separation, debuggable |
 | Incremental | Yes | Required by grading, efficient |
-| Raw metrics in fact | Yes | Flexibility for different aggregations |
+| Raw metrics in fact | Yes | Flexibility for aggregations |
 | 3 independent systems | Yes | Simpler implementation, meets requirements |
+| Agent tools separate | Yes | Each system queried independently |
+
+---
+
+## Revision History
+
+| Date | Change |
+|------|--------|
+| Jan 2026 | Consolidated architecture content, added agent architecture |

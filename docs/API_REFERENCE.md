@@ -1,5 +1,31 @@
 # API Reference
 
+```mermaid
+graph LR
+    subgraph "AdMob API"
+        A_REV[Revenue<br/>Source of Truth]
+        A_IMP[Impressions]
+    end
+
+    subgraph "Adjust API"
+        J_COST[Network Cost]
+        J_INST[Installs]
+        J_D0[D0 Metrics]
+        J_DAU[DAUs]
+    end
+
+    subgraph "Snowflake"
+        RAW[(RAW_CAPSTONE)]
+    end
+
+    A_REV --> RAW
+    A_IMP --> RAW
+    J_COST --> RAW
+    J_INST --> RAW
+    J_D0 --> RAW
+    J_DAU --> RAW
+```
+
 ## AdMob API v1
 
 ### Current Configuration

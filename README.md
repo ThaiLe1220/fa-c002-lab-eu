@@ -6,8 +6,7 @@ Data & AI Engineering Capstone - Foundry AI Academy
 
 Executive Decision Support Agent for Ameno Technologies. AI chatbot that queries real mobile app revenue data (AdMob + Adjust) to answer business questions for executives without SQL knowledge.
 
-**Primary User:** Chị Linh (Business Performance Controller)
-
+**Primary User:** Chi Linh (Business Performance Controller)
 **Deadline:** January 24, 2026
 
 ## Architecture
@@ -34,7 +33,6 @@ Executive Decision Support Agent for Ameno Technologies. AI chatbot that queries
 │ Adjust data   │   │ metrics       │   │ Vector store  │
 │ Snowflake     │   │ Local Kafka   │   │               │
 │ dbt transform │   │               │   │               │
-│               │   │               │   │               │
 │ CORE VALUE    │   │ CHECKBOX      │   │ CHECKBOX      │
 └───────────────┘   └───────────────┘   └───────────────┘
 ```
@@ -71,24 +69,58 @@ cd my_dbt_project && dbt build
 
 | Metric | Formula | Business Use |
 |--------|---------|--------------|
-| **ROAS** | ad_revenue / network_cost | Return on ad spend |
-| **D0 Revenue %** | ad_revenue_d0 / ad_revenue | Same-day payback |
-| **eCPM** | (ad_revenue / impressions) * 1000 | Ad efficiency |
+| **ROAS** | ad_revenue_d0 / network_cost | Return on ad spend |
 | **CPI** | network_cost / installs | Cost per install |
-| **IMPDAU** | ad_impressions / daus | Ads per user |
+| **eCPM** | (ad_revenue / impressions) × 1000 | Ad efficiency |
+| **IMPDAU** | ad_impressions_d0 / daus | Ads per user |
 
 **Business Context:** 70-80% of revenue comes from Day 0 (install day).
 
 ## Documentation
 
+```mermaid
+graph TB
+    subgraph "Start Here"
+        README[README.md<br/>Entry Point]
+        PLAN[PROJECT_PLAN.md<br/>What To Do]
+    end
+
+    subgraph "Understand The Problem"
+        AGENT_SPEC[AI_AGENT_SPEC.md<br/>Who & Why]
+        DASHBOARD[DASHBOARD_SPEC.md<br/>What To Build]
+    end
+
+    subgraph "Technical Details"
+        ARCH[ARCHITECTURE.md<br/>How It Works]
+        SCHEMA[DATA_SCHEMA.md<br/>Tables & SQL]
+        METRICS[METRICS.md<br/>Formulas]
+    end
+
+    subgraph "Reference"
+        SETUP[SETUP.md<br/>Environment]
+        API[API_REFERENCE.md<br/>APIs]
+    end
+
+    README --> PLAN
+    PLAN --> AGENT_SPEC
+    AGENT_SPEC --> DASHBOARD
+    DASHBOARD --> ARCH
+    ARCH --> SCHEMA
+    SCHEMA --> METRICS
+    PLAN --> SETUP
+    SCHEMA --> API
+```
+
 | Doc | Purpose |
 |-----|---------|
-| [PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | Phases, status, architecture overview |
-| [AI_AGENT_SPEC.md](docs/AI_AGENT_SPEC.md) | User context, business requirements |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture, schemas |
+| [PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | Phases, status, execution checklists |
+| [AI_AGENT_SPEC.md](docs/AI_AGENT_SPEC.md) | User context (chi Linh), requirements |
+| [DASHBOARD_SPEC.md](docs/DASHBOARD_SPEC.md) | 10 tabs mapping, MVP flow, agent phases |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture, 3 systems |
 | [DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | Snowflake tables, SQL examples |
-| [DATA_STRATEGY.md](docs/DATA_STRATEGY.md) | Metric formulas, business logic |
+| [METRICS.md](docs/METRICS.md) | All metric formulas (single source) |
 | [SETUP.md](docs/SETUP.md) | Environment setup |
+| [API_REFERENCE.md](docs/API_REFERENCE.md) | AdMob/Adjust API details |
 
 ## Project Structure
 

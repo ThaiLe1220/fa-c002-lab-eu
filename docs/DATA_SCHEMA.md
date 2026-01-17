@@ -1,87 +1,120 @@
 # Data Schema
 
+Snowflake tables, columns, and SQL examples.
+
+```mermaid
+graph LR
+    subgraph "Raw Layer"
+        ADMOB[ADMOB_DAILY<br/>Revenue source]
+        ADJUST[ADJUST_DAILY<br/>Attribution + Cost]
+    end
+
+    subgraph "Mart Layer"
+        DIM_APP[dim_apps]
+        DIM_DATE[dim_dates]
+        FACT[fct_app_daily<br/>_performance]
+    end
+
+    ADMOB --> FACT
+    ADJUST --> FACT
+    DIM_APP --> FACT
+    DIM_DATE --> FACT
+
+    style FACT fill:#4caf50,color:#fff
+```
+
+**Related docs:**
+- `METRICS.md` - How to calculate metrics from this data
+- `ARCHITECTURE.md` - How data flows through the system
+
+---
+
 ## Migration Status
 
 **Current:** dbt models use `RAW_MIDTEST` schema (midterm)
 **Target:** dbt models use `RAW_CAPSTONE` schema with D0 metrics
 
-### What's Missing
+### What's Missing in dbt
 
 | Column | Source | Status |
 |--------|--------|--------|
-| ad_revenue_d0 | Adjust API | In RAW_CAPSTONE, not in dbt |
-| ad_impressions_d0 | Adjust API | In RAW_CAPSTONE, not in dbt |
-| network_cost | Adjust API | In RAW_CAPSTONE, not in dbt |
-| paid_impressions | Adjust API | In RAW_CAPSTONE, not in dbt |
-| subscrevnt_revenue | Adjust API | In RAW_CAPSTONE, not in dbt |
+| ad_revenue_d0 | ADJUST_DAILY | In RAW_CAPSTONE, not in dbt |
+| ad_impressions_d0 | ADJUST_DAILY | In RAW_CAPSTONE, not in dbt |
+| network_cost | ADJUST_DAILY | In RAW_CAPSTONE, not in dbt |
+| paid_impressions | ADJUST_DAILY | In RAW_CAPSTONE, not in dbt |
+| subscrevnt_revenue | ADJUST_DAILY | In RAW_CAPSTONE, not in dbt |
 
 ### Migration Steps
 
-1. **Create new staging models** pointing to RAW_CAPSTONE
-   - `stg_admob_capstone.sql` → RAW_CAPSTONE.ADMOB_DAILY
-   - `stg_adjust_capstone.sql` → RAW_CAPSTONE.ADJUST_DAILY
-
-2. **Update intermediate model** to include new columns
-   - Add D0 metrics from Adjust
-   - Add network_cost, paid_impressions, subscrevnt_revenue
-
-3. **Update fact table** with calculated fields
-   - d0_revenue_pct = ad_revenue_d0 / ad_revenue
-   - roas = ad_revenue / network_cost
-
-4. **Run dbt build** and verify data flows correctly
-
-5. **Deprecate midtest models** (keep for reference)
-
-**Prerequisite for:** AI Agent integration (Phase 4)
+1. Create new staging models pointing to RAW_CAPSTONE
+2. Update intermediate model to include new columns
+3. Update fact table with all metrics
+4. Run `dbt build` and verify
+5. Deprecate midtest models
 
 ---
 
-## CSV File Formats
+## Raw Layer (RAW_CAPSTONE)
 
-### AdMob CSV
+### ADMOB_DAILY
 
-**File pattern:** `admob_pub-{PUBLISHER_ID}_{START}_{END}.csv`
+```sql
+CREATE TABLE RAW_CAPSTONE.ADMOB_DAILY (
+    RAW_RECORD_ID VARCHAR PRIMARY KEY,
+    BATCH_ID VARCHAR,
+    DATE VARCHAR,
+    APP_STORE_ID VARCHAR,
+    APP_NAME VARCHAR,
+    COUNTRY_CODE VARCHAR,
+    PLATFORM VARCHAR,
+    ESTIMATED_EARNINGS NUMBER,
+    AD_IMPRESSIONS NUMBER,
+    AD_CLICKS NUMBER,
+    AD_REQUESTS NUMBER,
+    MATCHED_REQUESTS NUMBER,
+    OBSERVED_ECPM NUMBER,
+    LOADED_AT TIMESTAMP
+);
+```
 
-| Column | Type | Example | Description |
-|--------|------|---------|-------------|
-| DISPLAY_NAME | String | `AI Video Generator: Flix AI` | App name |
-| APP_STORE_ID | String | `video.ai.videogenerator` | Package ID (join key) |
-| DATE | Date | `2025-09-19` | YYYY-MM-DD |
-| COUNTRY | String | `AE`, `US`, `IN` | ISO 2-letter |
-| PLATFORM | String | `Android`, `iOS` | OS |
-| ESTIMATED_EARNINGS | Float | `2.98` | Revenue USD |
-| IMPRESSIONS | Integer | `638` | Ads shown |
-
+**Source:** AdMob API (source of truth for revenue)
 **Granularity:** app + country + platform + date
+**Volume:** ~1,500 rows/day
 
-### Adjust CSV
+### ADJUST_DAILY
 
-**File pattern:** `adjust_{START}_{END}.csv`
+```sql
+CREATE TABLE RAW_CAPSTONE.ADJUST_DAILY (
+    RAW_RECORD_ID VARCHAR PRIMARY KEY,
+    BATCH_ID VARCHAR,
+    DAY DATE,
+    STORE_ID VARCHAR,
+    APP VARCHAR,
+    COUNTRY_CODE VARCHAR,
+    OS_NAME VARCHAR,
+    INSTALLS NUMBER,
+    CLICKS NUMBER,
+    DAUS NUMBER,
+    AD_REVENUE NUMBER,
+    AD_IMPRESSIONS NUMBER,
+    AD_REVENUE_TOTAL_D0 NUMBER,
+    AD_IMPRESSIONS_TOTAL_D0 NUMBER,
+    NETWORK_COST NUMBER,
+    PAID_IMPRESSIONS NUMBER,
+    SUBSCREVNT_REVENUE NUMBER,
+    LOADED_AT TIMESTAMP
+);
+```
 
-| Column | Type | Example | Description |
-|--------|------|---------|-------------|
-| app | String | `AI GPT Generator` | App name |
-| store_id | String | `ai.video.generator` | Package ID (join key) |
-| day | Date | `2025-09-19` | YYYY-MM-DD |
-| country_code | String | `in`, `bd` | ISO 2-letter (lowercase) |
-| country | String | `India` | Full name |
-| os_name | String | `android`, `ios` | OS (lowercase) |
-| installs | Integer | `23320` | New downloads |
-| daus | Float | `39308.0` | Daily active users |
-| ad_revenue | Float | `648.51` | Ad revenue USD |
-| ad_impressions | Integer | `315232` | Impressions |
-| ad_revenue_total_d0 | Float | `473.92` | Day 0 revenue |
-| ad_impressions_total_d0 | Integer | `237762` | Day 0 impressions |
-| network_cost | Float | `663.29` | Marketing spend |
-
+**Source:** Adjust API (source of truth for attribution and cost)
 **Granularity:** app + country + OS + date
+**Volume:** ~4,000 rows/day
 
 ---
 
-## Snowflake Tables
+## Mart Layer (ANALYTICS)
 
-### Fact Table: fct_app_daily_performance
+### fct_app_daily_performance
 
 ```sql
 SELECT
@@ -91,11 +124,11 @@ SELECT
     country_code,         -- Degenerate dimension
     platform,             -- Degenerate dimension
 
-    -- AdMob metrics
+    -- AdMob metrics (source of truth for revenue)
     ad_revenue,
     ad_impressions,
     ad_clicks,
-    ad_ctr,               -- Calculated: clicks/impressions
+    ad_ctr,
 
     -- Adjust metrics
     installs,
@@ -105,23 +138,20 @@ SELECT
     -- D0 metrics (critical for ROAS)
     ad_revenue_d0,
     ad_impressions_d0,
-    d0_revenue_pct,       -- Calculated: d0/total
+    d0_revenue_pct,
 
     -- Cost & revenue
     network_cost,
     paid_impressions,
     subscrevnt_revenue,
-    total_revenue,        -- Calculated: ad + subs
-
-    -- Derived metrics
-    revenue_per_install,
-    revenue_per_click,
 
     dbt_updated_at
 FROM analytics.fct_app_daily_performance
 ```
 
-### Dimension: dim_apps
+**Grain:** One row per app × date × country × platform
+
+### dim_apps
 
 ```sql
 SELECT
@@ -131,7 +161,7 @@ SELECT
 FROM analytics.dim_apps
 ```
 
-### Dimension: dim_dates
+### dim_dates
 
 ```sql
 SELECT
@@ -144,6 +174,61 @@ SELECT
     day_name
 FROM analytics.dim_dates
 ```
+
+---
+
+## Column Mapping
+
+### AdMob → Fact Table
+
+| ADMOB_DAILY | Maps to | Notes |
+|-------------|---------|-------|
+| ESTIMATED_EARNINGS | ad_revenue | Source of truth for money |
+| AD_IMPRESSIONS | ad_impressions | For eCPM calculation |
+| AD_CLICKS | ad_clicks | For CTR |
+| APP_STORE_ID | app_key (via dim) | Join key |
+| COUNTRY_CODE | country_code | Breakdown dimension |
+| DATE | date_key (via dim) | Time dimension |
+| PLATFORM | platform | iOS/Android |
+
+### Adjust → Fact Table
+
+| ADJUST_DAILY | Maps to | Notes |
+|--------------|---------|-------|
+| NETWORK_COST | network_cost | UA spend |
+| INSTALLS | installs | New users |
+| DAUS | daus | Active users |
+| AD_REVENUE | (reconciliation only) | Compare with AdMob |
+| AD_IMPRESSIONS | (reconciliation only) | Compare with AdMob |
+| AD_REVENUE_TOTAL_D0 | ad_revenue_d0 | Day 0 revenue |
+| AD_IMPRESSIONS_TOTAL_D0 | ad_impressions_d0 | Day 0 impressions |
+| PAID_IMPRESSIONS | paid_impressions | UA impressions |
+| SUBSCREVNT_REVENUE | subscrevnt_revenue | IAP revenue |
+| STORE_ID | app_key (via dim) | Join key |
+| COUNTRY_CODE | country_code | Breakdown dimension |
+| DAY | date_key (via dim) | Time dimension |
+| OS_NAME | platform | Standardized to iOS/Android |
+
+---
+
+## Join Keys
+
+```python
+# Matching AdMob and Adjust
+AdMob.APP_STORE_ID == Adjust.STORE_ID
+AdMob.DATE == Adjust.DAY
+AdMob.COUNTRY_CODE == Adjust.COUNTRY_CODE  # case-insensitive
+AdMob.PLATFORM == Adjust.OS_NAME           # standardize to iOS/Android
+```
+
+### Expected Variance
+
+```
+AdMob.ESTIMATED_EARNINGS ~ Adjust.AD_REVENUE     # 2-5% variance normal
+AdMob.AD_IMPRESSIONS ~ Adjust.AD_IMPRESSIONS     # 2-5% variance normal
+```
+
+**Reasons for mismatch:** Timezones, attribution windows, network delays
 
 ---
 
@@ -169,92 +254,75 @@ ORDER BY revenue DESC
 LIMIT 5
 ```
 
-### iOS vs Android
-
-```sql
-SELECT
-    platform,
-    SUM(ad_revenue) as revenue,
-    SUM(installs) as installs
-FROM analytics.fct_app_daily_performance
-GROUP BY platform
-```
-
-### D0 Performance by App
-
-```sql
-SELECT
-    a.app_name,
-    SUM(f.ad_revenue_d0) as d0_revenue,
-    SUM(f.ad_revenue) as total_revenue,
-    ROUND(SUM(f.ad_revenue_d0) / NULLIF(SUM(f.ad_revenue), 0) * 100, 1) as d0_pct
-FROM analytics.fct_app_daily_performance f
-JOIN analytics.dim_apps a ON f.app_key = a.app_key
-WHERE f.ad_revenue > 0
-GROUP BY a.app_name
-ORDER BY d0_pct DESC
-```
-
-### Marketing ROI
-
-```sql
-SELECT
-    a.app_name,
-    SUM(f.ad_revenue) as revenue,
-    SUM(f.network_cost) as spend,
-    ROUND(SUM(f.ad_revenue) / NULLIF(SUM(f.network_cost), 0), 2) as roas
-FROM analytics.fct_app_daily_performance f
-JOIN analytics.dim_apps a ON f.app_key = a.app_key
-WHERE f.network_cost > 0
-GROUP BY a.app_name
-ORDER BY roas DESC
-```
-
-### Country Performance
+### D0 ROAS by Country
 
 ```sql
 SELECT
     country_code,
-    SUM(ad_revenue) as revenue,
-    SUM(installs) as installs,
-    ROUND(SUM(ad_revenue) / NULLIF(SUM(installs), 0), 2) as revenue_per_install
+    SUM(ad_revenue_d0) / NULLIF(SUM(network_cost), 0) as d0_roas
 FROM analytics.fct_app_daily_performance
+WHERE date >= CURRENT_DATE - 7
 GROUP BY country_code
-ORDER BY revenue DESC
-LIMIT 10
+ORDER BY d0_roas DESC
+```
+
+### Revenue Reconciliation
+
+```sql
+WITH combined AS (
+    SELECT
+        a.date,
+        a.app_store_id,
+        a.country_code,
+        a.estimated_earnings as admob_rev,
+        j.ad_revenue as adjust_rev
+    FROM raw_capstone.admob_daily a
+    LEFT JOIN raw_capstone.adjust_daily j
+        ON a.app_store_id = j.store_id
+        AND a.date = j.day
+        AND UPPER(a.country_code) = UPPER(j.country_code)
+    WHERE a.date >= CURRENT_DATE - 7
+)
+SELECT
+    date,
+    SUM(admob_rev) as admob_total,
+    SUM(adjust_rev) as adjust_total,
+    ABS(SUM(adjust_rev) - SUM(admob_rev)) / NULLIF(SUM(admob_rev), 0) * 100 as diff_pct
+FROM combined
+GROUP BY date
+ORDER BY date DESC
+```
+
+### Cost Analysis by App
+
+```sql
+SELECT
+    a.app_name,
+    SUM(f.network_cost) as total_cost,
+    SUM(f.installs) as total_installs,
+    SUM(f.network_cost) / NULLIF(SUM(f.installs), 0) as cpi,
+    SUM(f.ad_revenue_d0) / NULLIF(SUM(f.network_cost), 0) as d0_roas
+FROM analytics.fct_app_daily_performance f
+JOIN analytics.dim_apps a ON f.app_key = a.app_key
+WHERE f.network_cost > 0
+GROUP BY a.app_name
+ORDER BY total_cost DESC
 ```
 
 ---
 
-## Joining AdMob + Adjust
+## Data Volume
 
-### Match Keys
-
-```python
-AdMob.APP_STORE_ID == Adjust.store_id
-AdMob.DATE == Adjust.day
-AdMob.COUNTRY == Adjust.country_code  # (case-insensitive)
-AdMob.PLATFORM == Adjust.os_name      # (lowercase in Adjust)
-```
-
-### Expected Variance
-
-```
-AdMob.ESTIMATED_EARNINGS ~ Adjust.ad_revenue   # 2-5% variance normal
-AdMob.IMPRESSIONS ~ Adjust.ad_impressions      # 2-5% variance normal
-```
-
-**Discrepancy reasons:** Time zones, attribution windows, network delays
+| Table | Daily Volume | Monthly |
+|-------|--------------|---------|
+| ADMOB_DAILY | ~1,500 rows | ~45K rows |
+| ADJUST_DAILY | ~4,000 rows | ~120K rows |
+| fct_app_daily_performance | ~4,000 rows | ~120K rows |
 
 ---
 
-## Key Metrics Reference
+## Revision History
 
-| Metric | Formula | Business Use |
-|--------|---------|--------------|
-| **CPI** | network_cost / installs | Cost per install |
-| **ARPDAU** | ad_revenue / daus | Revenue per DAU |
-| **eCPM** | (revenue / impressions) * 1000 | Revenue per 1K impressions |
-| **D0 Revenue %** | ad_revenue_d0 / ad_revenue | Same-day payback |
-| **ROAS** | ad_revenue / network_cost | Return on ad spend |
-| **CTR** | clicks / impressions | Click-through rate |
+| Date | Change |
+|------|--------|
+| Jan 2026 | Restructured: moved metrics to METRICS.md, focused on schema |

@@ -4,9 +4,40 @@ Data & AI Engineering Capstone - Foundry AI Academy
 
 ## Overview
 
-End-to-end data platform transforming real mobile app revenue data (AdMob + Adjust) into intelligent business insights through modern data stack and AI agent.
+Executive Decision Support Agent for Ameno Technologies. AI chatbot that queries real mobile app revenue data (AdMob + Adjust) to answer business questions for executives without SQL knowledge.
 
-**Goal:** Executive Decision Support Agent for Ameno Technologies
+**Primary User:** Chị Linh (Business Performance Controller)
+
+**Deadline:** January 24, 2026
+
+## Architecture
+
+**Three Independent Systems → One Agent**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         AI AGENT                                │
+│              LangGraph + Memory + Business Context              │
+│                                                                 │
+│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐          │
+│  │ Snowflake   │   │   Kafka     │   │    RAG      │          │
+│  │   Tool      │   │   Tool      │   │   Tool      │          │
+│  └─────────────┘   └─────────────┘   └─────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+        │                    │                    │
+        ▼                    ▼                    ▼
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+│   SYSTEM 1    │   │   SYSTEM 2    │   │   SYSTEM 3    │
+│  Batch Data   │   │  Streaming    │   │  Documents    │
+├───────────────┤   ├───────────────┤   ├───────────────┤
+│ Real AdMob/   │   │ Simulated     │   │ PDF docs      │
+│ Adjust data   │   │ metrics       │   │ Vector store  │
+│ Snowflake     │   │ Local Kafka   │   │               │
+│ dbt transform │   │               │   │               │
+│               │   │               │   │               │
+│ CORE VALUE    │   │ CHECKBOX      │   │ CHECKBOX      │
+└───────────────┘   └───────────────┘   └───────────────┘
+```
 
 ## Project Status
 
@@ -16,10 +47,10 @@ End-to-end data platform transforming real mobile app revenue data (AdMob + Adju
 | Phase 1-2 | Snowflake + dbt | Done | 30 |
 | Phase 2.5 | dbt Migration (D0 metrics) | **Next** | - |
 | Phase 3 | Kafka + Airflow | To Do | 15 |
-| Phase 4 | AI Agent + RAG | Priority | 20 |
+| Phase 4 | AI Agent | Priority | 20 |
 | Phase 5 | Docs + Demo | To Do | 10 |
 
-**Midterm:** 75/100 | **Final Test:** January 24, 2026
+**Midterm:** 75/100 | **Target:** 80+ points
 
 ## Quick Start
 
@@ -28,65 +59,12 @@ End-to-end data platform transforming real mobile app revenue data (AdMob + Adju
 cd /Users/lehongthai/code_personal/fa-c002-lab
 source .venv/bin/activate
 
-# Data collection (Adjust + AdMob to Snowflake)
+# Data collection
 python scripts/collect_adjust_capstone.py --days 3
 python scripts/collect_admob_capstone.py --days 3
 
 # dbt pipeline
 cd my_dbt_project && dbt build
-```
-
-## Architecture
-
-```
-DATA SOURCES              STORAGE                 TRANSFORMATION          OUTPUT
-┌─────────────┐          ┌─────────────┐         ┌─────────────┐        ┌─────────────┐
-│  AdMob API  │─────────▶│  Snowflake  │────────▶│  dbt Models │───────▶│  AI Agent   │
-│ Adjust API  │          │ RAW_CAPSTONE│         │  Star Schema│        │  Streamlit  │
-└─────────────┘          └─────────────┘         └─────────────┘        └─────────────┘
-       │                                                                        │
-       ▼                                                                        ▼
-┌─────────────┐                                                        ┌─────────────┐
-│   Kafka     │                                                        │  Executives │
-│ (Real-time) │                                                        │  Dashboard  │
-└─────────────┘                                                        └─────────────┘
-       │                        ┌─────────────┐
-       └───────────────────────▶│   Airflow   │
-                                │(Orchestrate)│
-                                └─────────────┘
-```
-
-## Data Sources
-
-| Source | Schema | Volume | Key Metrics |
-|--------|--------|--------|-------------|
-| Adjust | `RAW_CAPSTONE.ADJUST_DAILY` | ~4K rows/day | installs, daus, ad_revenue, network_cost, D0 metrics |
-| AdMob | `RAW_CAPSTONE.ADMOB_DAILY` | ~1.5K rows/day | estimated_earnings, impressions, eCPM |
-
-## Project Structure
-
-```
-fa-c002-lab/
-├── README.md                    # This file
-├── CLAUDE.md                    # AI assistant context
-├── scripts/
-│   ├── collect_adjust_capstone.py
-│   └── collect_admob_capstone.py
-├── my_dbt_project/
-│   └── models/
-│       ├── 01_staging/          # stg_adjust, stg_admob
-│       ├── 02_intermediate/     # int_app_daily_metrics
-│       └── 03_mart/             # fct_app_daily_performance, dim_apps, dim_dates
-├── agent/                       # [To Do] AI Agent
-├── kafka/                       # [To Do] Streaming
-├── dags/                        # [To Do] Airflow DAGs
-└── docs/
-    ├── ARCHITECTURE.md          # Star schema, data flow
-    ├── DATA_SCHEMA.md           # Schema details, queries
-    ├── SETUP.md                 # Environment setup
-    ├── PROJECT_PLAN.md          # Capstone phases, checklist
-    ├── DATA_STRATEGY.md         # Business logic, ROAS formulas
-    └── API_REFERENCE.md         # API capabilities
 ```
 
 ## Key Metrics
@@ -97,20 +75,42 @@ fa-c002-lab/
 | **D0 Revenue %** | ad_revenue_d0 / ad_revenue | Same-day payback |
 | **eCPM** | (ad_revenue / impressions) * 1000 | Ad efficiency |
 | **CPI** | network_cost / installs | Cost per install |
-| **ARPDAU** | ad_revenue / daus | Revenue per active user |
+| **IMPDAU** | ad_impressions / daus | Ads per user |
 
-**Business Context:** 70-80% of revenue comes from Day 0 (install day). D0 metrics are critical for ROAS analysis.
+**Business Context:** 70-80% of revenue comes from Day 0 (install day).
 
 ## Documentation
 
-| # | Doc | Purpose |
-|---|-----|---------|
-| 1 | [PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | **Start here.** Phases, status, course material references |
-| 2 | [DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | Tables, schemas, example SQL queries |
-| 3 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Star schema, dbt layers, data flow |
-| 4 | [API_REFERENCE.md](docs/API_REFERENCE.md) | AdMob/Adjust API capabilities and limits |
-| 5 | [DATA_STRATEGY.md](docs/DATA_STRATEGY.md) | Business logic, ROAS formulas, metrics |
-| 6 | [SETUP.md](docs/SETUP.md) | Environment setup (reference when needed) |
+| Doc | Purpose |
+|-----|---------|
+| [PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | Phases, status, architecture overview |
+| [AI_AGENT_SPEC.md](docs/AI_AGENT_SPEC.md) | User context, business requirements |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture, schemas |
+| [DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | Snowflake tables, SQL examples |
+| [DATA_STRATEGY.md](docs/DATA_STRATEGY.md) | Metric formulas, business logic |
+| [SETUP.md](docs/SETUP.md) | Environment setup |
+
+## Project Structure
+
+```
+fa-c002-lab/
+├── agent/                    # AI Agent [To Do]
+│   ├── tools/                # Snowflake, Kafka, RAG tools
+│   └── app.py                # Streamlit UI
+├── kafka/                    # Streaming [To Do]
+│   └── docker-compose.yml
+├── dags/                     # Airflow [To Do]
+│   └── dbt_pipeline.py
+├── my_dbt_project/           # dbt models
+│   └── models/
+│       ├── 01_staging/
+│       ├── 02_intermediate/
+│       └── 03_mart/
+├── scripts/                  # Data collection
+│   ├── collect_adjust_capstone.py
+│   └── collect_admob_capstone.py
+└── docs/                     # Documentation
+```
 
 ## Tech Stack
 
@@ -118,10 +118,9 @@ fa-c002-lab/
 - **Snowflake** - Data warehouse (`DB_T34`)
 - **Python** - API collection, AI agent
 - **LangGraph** - AI agent framework
-- **Kafka** - Real-time streaming
+- **Kafka** - Streaming (checkbox)
 - **Airflow** - Orchestration
 - **Streamlit** - UI
-- **GitHub Actions** - CI/CD
 
 ---
 

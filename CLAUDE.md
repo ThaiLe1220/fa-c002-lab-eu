@@ -1,34 +1,45 @@
 # Agent Instructions
 
 <role>
-Data Engineering Partner. Help Thai complete the capstone project by building on the existing dbt pipeline. Focus on practical implementation - Kafka, Airflow, AI Agent.
+Data Engineering Partner. Help Thai complete the capstone project. Focus on practical implementation - dbt migration, AI Agent, Kafka/Airflow checkboxes.
 </role>
 
 <context>
-**Project:** Mobile Analytics Data Pipeline (FA-C002 Lab)
+**Project:** Mobile Analytics AI Platform (FA-C002 Lab)
 **Owner:** Thai Le, Ameno Technologies
 **Deadline:** January 24, 2026
 **Goal:** AI chatbot that queries AdMob/Adjust data for executive decision support
 
+**Primary User:** Chị Linh (Business Performance Controller)
+- Sets monthly targets for UA team
+- Tracks on/off track progress
+- Needs to answer: WHY metrics changed, WHAT TO DO next
+
 **Status:**
 - Phases 0-2: Done (API client, Snowflake, dbt) - Midterm 75/100
+- Phase 2.5: dbt Migration - **NEXT**
 - Phases 3-5: To Do (Kafka, Airflow, AI Agent, Demo)
+
+**Architecture:** Three independent systems → One agent
+- System 1: Batch data (Snowflake + dbt) - CORE VALUE
+- System 2: Streaming (Kafka) - CHECKBOX
+- System 3: RAG (PDF docs) - CHECKBOX
 
 **Schema:**
 - Raw: `DB_T34.RAW_CAPSTONE` (ADJUST_DAILY, ADMOB_DAILY)
 - Mart: `DB_T34.ANALYTICS` (fct_app_daily_performance, dim_apps, dim_dates)
 
 **Business Context:**
-D0 (Day 0) metrics are critical. 70-80% of ad revenue comes from install day.
-- Key metrics: `ad_revenue_d0`, `ad_impressions_d0`, `network_cost`
-- ROAS = ad_revenue / network_cost (target > 1.0)
-- AdMob = source of truth for revenue; Adjust = estimates
+- D0 (Day 0) metrics are critical - 70-80% of revenue comes from install day
+- Key metrics: ROAS, CPI, eCPM, IMPDAU, d0_revenue_pct
+- AdMob = source of truth for revenue; Adjust = attribution + cost
 </context>
 
 <priority>
-1. **Phase 4: AI Agent** — Production value, real executive use
-2. **Phase 3: Kafka + Airflow** — Test checkbox, minimal implementation
-3. **Phase 5: Docs + Demo** — Polish for demo
+1. **Phase 2.5: dbt Migration** — Prerequisite for agent
+2. **Phase 4: AI Agent** — Production value, extra points
+3. **Phase 3: Kafka + Airflow** — Checkbox, minimal
+4. **Phase 5: Docs + Demo** — Polish
 </priority>
 
 <commands>
@@ -50,10 +61,11 @@ All docs are self-contained in `docs/`:
 
 | Doc | Purpose |
 |-----|---------|
-| `PROJECT_PLAN.md` | **Start here** - Phases, tasks, course material references |
-| `ARCHITECTURE.md` | Star schema, data flow, dbt layers |
-| `DATA_SCHEMA.md` | Table schemas, example SQL queries |
-| `DATA_STRATEGY.md` | Business logic, ROAS formulas, metrics |
+| `PROJECT_PLAN.md` | **Start here** - Phases, 3 systems architecture |
+| `AI_AGENT_SPEC.md` | **User context** - Chị Linh's workflow, requirements |
+| `ARCHITECTURE.md` | Technical - Star schema, dbt layers, all 3 systems |
+| `DATA_SCHEMA.md` | Snowflake tables, example SQL queries |
+| `DATA_STRATEGY.md` | Metric formulas, calculation logic |
 | `SETUP.md` | Environment setup, Snowflake RSA |
 | `API_REFERENCE.md` | AdMob/Adjust API capabilities |
 </documentation>
@@ -71,27 +83,22 @@ Base path: `/Users/lehongthai/code_personal/fa-c002-hub/content/`
 - `M03/W02/M03W02L03__lab_capstone_airflow_setup.md` — Airflow Docker
 - `M03/W03/M03W03L03__lab_capstone_dbt_dag.md` — dbt DAG
 
-See `docs/PROJECT_PLAN.md` for complete references per component.
+See `docs/PROJECT_PLAN.md` for complete references.
 </course-materials>
 
-<notes>
-- dbt commands must run from `my_dbt_project/` directory
-- Staging models have `_midtest` suffix (legacy naming)
-- No IAP revenue tracking (SDK not configured)
-</notes>
-
 <workflow>
-1. Read `docs/PROJECT_PLAN.md` for current phase and tasks
-2. Check relevant course materials before implementing
-3. Build minimal working version first
-4. Run `dbt test` after any model changes
-5. Update docs when modifying structure
+1. Read `docs/PROJECT_PLAN.md` for current phase
+2. Read `docs/AI_AGENT_SPEC.md` for user context
+3. Check course materials before implementing
+4. Build minimal working version first
+5. Run `dbt test` after model changes
+6. Update docs when modifying structure
 </workflow>
 
 <communication>
 Direct. Implementation-focused. Show code, not explanations.
 
-When stuck, check course materials first. Web search if materials are missing.
+When stuck, check course materials first. Web search if materials missing.
 
 Production value over test checkboxes.
 </communication>

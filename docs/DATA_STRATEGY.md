@@ -1,31 +1,25 @@
 # Mobile Analytics Data Strategy
 
-**Original:** October 2025 (Midterm Planning)
-**Updated:** January 2026 (Capstone Context)
-**Status:** Foundation Complete - Expanding for AI Agent Phase
+**Purpose:** Metric formulas and calculation logic for the data warehouse.
 
-**Project Goal:** Build a production-grade data warehouse that delivers real business value to mobile app publishers.
+**Related Docs:**
+- `AI_AGENT_SPEC.md` - User context (who uses the system, what they need)
+- `ARCHITECTURE.md` - Technical architecture (how the system works)
+- This doc - **How to calculate metrics**
 
-**Success Criteria:**
+---
 
-- Midterm (75/100): Data pipeline + dbt models complete
-- Capstone: AI Agent for executives + Kafka/Airflow + enhanced metrics
-- Replace manual Google Sheet workflow with automated data warehouse
-- Enable BOD/UA/DEV teams to make data-driven decisions on ROAS optimization
+**Data Sources:**
 
-**Key Findings from API Validation:**
+- AdMob: Daily granularity (SOURCE OF TRUTH for revenue)
+- Adjust: Daily granularity (attribution + D0 metrics + network costs)
 
-- AdMob: Daily granularity only, 13.5K rows/day (SOURCE OF TRUTH for revenue)
-- Adjust: Hourly granularity available, 936 rows/day (attribution + network costs)
-- Cohort retention data available (D0, D1, D7, D30)
-- IAP revenue NOT tracked
+**Key Metrics:**
 
-**Capstone Metrics (Jan 2026):**
-
-- `ad_revenue_total_D0`, `ad_impressions_total_D0` - Day 0 metrics (critical for ROAS)
-- `network_cost` - Marketing spend for ROI analysis
-- `paid_impressions` - Paid UA impression count
-- `subscrevnt_revenue` - Subscription revenue stream
+- `ad_revenue_d0`, `ad_impressions_d0` - Day 0 metrics (70-80% of total)
+- `network_cost` - Marketing spend for ROAS
+- `paid_impressions` - UA impression count
+- `subscrevnt_revenue` - Subscription revenue
 
 ---
 

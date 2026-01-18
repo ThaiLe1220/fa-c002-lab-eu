@@ -19,9 +19,16 @@ SELECT
     CAST(AD_REVENUE AS DECIMAL(18,6)) AS ad_revenue_adjust,
     CAST(AD_IMPRESSIONS AS INTEGER) AS ad_impressions_adjust,
 
-    -- D0 metrics (critical for ROAS)
+    -- Cohort metrics (D0, D1, D3, D7 for LTV curve)
+    -- D0 = install day, D7 = cumulative through day 7
     CAST(AD_REVENUE_TOTAL_D0 AS DECIMAL(18,6)) AS ad_revenue_d0,
     CAST(AD_IMPRESSIONS_TOTAL_D0 AS INTEGER) AS ad_impressions_d0,
+    CAST(AD_REVENUE_TOTAL_D1 AS DECIMAL(18,6)) AS ad_revenue_d1,
+    CAST(AD_IMPRESSIONS_TOTAL_D1 AS INTEGER) AS ad_impressions_d1,
+    CAST(AD_REVENUE_TOTAL_D3 AS DECIMAL(18,6)) AS ad_revenue_d3,
+    CAST(AD_IMPRESSIONS_TOTAL_D3 AS INTEGER) AS ad_impressions_d3,
+    CAST(AD_REVENUE_TOTAL_D7 AS DECIMAL(18,6)) AS ad_revenue_d7,
+    CAST(AD_IMPRESSIONS_TOTAL_D7 AS INTEGER) AS ad_impressions_d7,
 
     -- Cost metrics
     CAST(NETWORK_COST AS DECIMAL(18,6)) AS network_cost,

@@ -29,31 +29,6 @@ graph LR
 
 ---
 
-## Migration Status
-
-**Current:** dbt models use `RAW_MIDTEST` schema (midterm)
-**Target:** dbt models use `RAW_CAPSTONE` schema with D0 metrics
-
-### What's Missing in dbt
-
-| Column | Source | Status |
-|--------|--------|--------|
-| ad_revenue_d0 | ADJUST_DAILY | In RAW_CAPSTONE, not in dbt |
-| ad_impressions_d0 | ADJUST_DAILY | In RAW_CAPSTONE, not in dbt |
-| network_cost | ADJUST_DAILY | In RAW_CAPSTONE, not in dbt |
-| paid_impressions | ADJUST_DAILY | In RAW_CAPSTONE, not in dbt |
-| subscrevnt_revenue | ADJUST_DAILY | In RAW_CAPSTONE, not in dbt |
-
-### Migration Steps
-
-1. Create new staging models pointing to RAW_CAPSTONE
-2. Update intermediate model to include new columns
-3. Update fact table with all metrics
-4. Run `dbt build` and verify
-5. Deprecate midtest models
-
----
-
 ## Raw Layer (RAW_CAPSTONE)
 
 ### ADMOB_DAILY
@@ -97,8 +72,16 @@ CREATE TABLE RAW_CAPSTONE.ADJUST_DAILY (
     DAUS NUMBER,
     AD_REVENUE NUMBER,
     AD_IMPRESSIONS NUMBER,
+    -- D0-D7 Cohort metrics (cumulative through day N)
     AD_REVENUE_TOTAL_D0 NUMBER,
     AD_IMPRESSIONS_TOTAL_D0 NUMBER,
+    AD_REVENUE_TOTAL_D1 NUMBER,
+    AD_IMPRESSIONS_TOTAL_D1 NUMBER,
+    AD_REVENUE_TOTAL_D3 NUMBER,
+    AD_IMPRESSIONS_TOTAL_D3 NUMBER,
+    AD_REVENUE_TOTAL_D7 NUMBER,
+    AD_IMPRESSIONS_TOTAL_D7 NUMBER,
+    -- Cost and IAP
     NETWORK_COST NUMBER,
     PAID_IMPRESSIONS NUMBER,
     SUBSCREVNT_REVENUE NUMBER,
@@ -108,7 +91,7 @@ CREATE TABLE RAW_CAPSTONE.ADJUST_DAILY (
 
 **Source:** Adjust API (source of truth for attribution and cost)
 **Granularity:** app + country + OS + date
-**Volume:** ~4,000 rows/day
+**Volume:** ~4,000 rows/day (45 apps, 240 countries)
 
 ---
 
@@ -130,17 +113,26 @@ SELECT
     ad_clicks,
     ad_ctr,
 
-    -- Adjust metrics
+    -- Adjust metrics (for reconciliation)
+    ad_revenue_adjust,
+    ad_impressions_adjust,
+
+    -- User metrics
     installs,
     clicks,
     daus,
 
-    -- D0 metrics (critical for ROAS)
-    ad_revenue_d0,
+    -- D0-D7 Cohort metrics (LTV curve)
+    ad_revenue_d0,        -- 70-80% of lifetime
     ad_impressions_d0,
-    d0_revenue_pct,
+    ad_revenue_d1,        -- Cumulative through D1
+    ad_impressions_d1,
+    ad_revenue_d3,        -- Cumulative through D3
+    ad_impressions_d3,
+    ad_revenue_d7,        -- Cumulative through D7 (~95% of lifetime)
+    ad_impressions_d7,
 
-    -- Cost & revenue
+    -- Cost & IAP revenue
     network_cost,
     paid_impressions,
     subscrevnt_revenue,
@@ -198,16 +190,22 @@ FROM analytics.dim_dates
 | NETWORK_COST | network_cost | UA spend |
 | INSTALLS | installs | New users |
 | DAUS | daus | Active users |
-| AD_REVENUE | (reconciliation only) | Compare with AdMob |
-| AD_IMPRESSIONS | (reconciliation only) | Compare with AdMob |
-| AD_REVENUE_TOTAL_D0 | ad_revenue_d0 | Day 0 revenue |
+| AD_REVENUE | ad_revenue_adjust | For reconciliation |
+| AD_IMPRESSIONS | ad_impressions_adjust | For reconciliation |
+| AD_REVENUE_TOTAL_D0 | ad_revenue_d0 | Day 0 revenue (70-80% LTV) |
 | AD_IMPRESSIONS_TOTAL_D0 | ad_impressions_d0 | Day 0 impressions |
+| AD_REVENUE_TOTAL_D1 | ad_revenue_d1 | Cumulative through D1 |
+| AD_IMPRESSIONS_TOTAL_D1 | ad_impressions_d1 | Cumulative through D1 |
+| AD_REVENUE_TOTAL_D3 | ad_revenue_d3 | Cumulative through D3 |
+| AD_IMPRESSIONS_TOTAL_D3 | ad_impressions_d3 | Cumulative through D3 |
+| AD_REVENUE_TOTAL_D7 | ad_revenue_d7 | Cumulative through D7 (~95% LTV) |
+| AD_IMPRESSIONS_TOTAL_D7 | ad_impressions_d7 | Cumulative through D7 |
 | PAID_IMPRESSIONS | paid_impressions | UA impressions |
 | SUBSCREVNT_REVENUE | subscrevnt_revenue | IAP revenue |
 | STORE_ID | app_key (via dim) | Join key |
 | COUNTRY_CODE | country_code | Breakdown dimension |
 | DAY | date_key (via dim) | Time dimension |
-| OS_NAME | platform | Standardized to iOS/Android |
+| OS_NAME | platform | Standardized to IOS/ANDROID |
 
 ---
 
@@ -313,11 +311,13 @@ ORDER BY total_cost DESC
 
 ## Data Volume
 
-| Table | Daily Volume | Monthly |
-|-------|--------------|---------|
-| ADMOB_DAILY | ~1,500 rows | ~45K rows |
-| ADJUST_DAILY | ~4,000 rows | ~120K rows |
-| fct_app_daily_performance | ~4,000 rows | ~120K rows |
+| Table | Apps | Countries | Daily Volume | Monthly |
+|-------|------|-----------|--------------|---------|
+| ADMOB_DAILY | 55 | 225 | ~3,800 rows | ~114K rows |
+| ADJUST_DAILY | 45 | 240 | ~4,200 rows | ~126K rows |
+| fct_app_daily_performance | 42+ | 240 | ~4,200 rows | ~126K rows |
+
+**Note:** 42 apps appear in both sources. FULL OUTER JOIN captures all.
 
 ---
 
@@ -325,4 +325,5 @@ ORDER BY total_cost DESC
 
 | Date | Change |
 |------|--------|
+| Jan 2026 | Added D1, D3, D7 cohort columns, updated volumes for full portfolio |
 | Jan 2026 | Restructured: moved metrics to METRICS.md, focused on schema |

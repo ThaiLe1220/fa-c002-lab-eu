@@ -112,14 +112,21 @@ PYTHON COLLECTION           SNOWFLAKE RAW              DBT TRANSFORMATION       
 ├──────────────┤    │ country_code                         ││ │    ├──────────────┤
 │ app_key (PK) │◀───│ platform                             ││ │───▶│ date_key (PK)│
 │ app_store_id │    │                                      ││ │    │ date         │
-│ app_name     │    │ -- Raw Metrics --                    ││ │    │ year, month  │
-└──────────────┘    │ ad_revenue, ad_impressions           ││ │    │ day_of_week  │
-                    │ installs, daus, network_cost         ││ │    └──────────────┘
+│ app_name     │    │ -- AdMob (source of truth) --        ││ │    │ year, month  │
+└──────────────┘    │ ad_revenue, ad_impressions, ad_clicks││ │    │ day_of_week  │
+                    │                                      ││ │    └──────────────┘
+                    │ -- User Metrics --                   ││ │
+                    │ installs, clicks, daus               ││ │
+                    │                                      ││ │
+                    │ -- D0-D7 Cohort (LTV curve) --       ││ │
                     │ ad_revenue_d0, ad_impressions_d0     ││ │
-                    │ paid_impressions, subscrevnt_revenue │└─┘
+                    │ ad_revenue_d1, ad_impressions_d1     ││ │
+                    │ ad_revenue_d3, ad_impressions_d3     ││ │
+                    │ ad_revenue_d7, ad_impressions_d7     │└─┘
                     │                                      │
-                    │ -- Calculated --                     │
-                    │ ad_ctr, d0_revenue_pct               │
+                    │ -- Cost & IAP --                     │
+                    │ network_cost, paid_impressions       │
+                    │ subscrevnt_revenue                   │
                     └─────────────────────────────────────────┘
 ```
 
@@ -139,13 +146,14 @@ PYTHON COLLECTION           SNOWFLAKE RAW              DBT TRANSFORMATION       
 ### Metrics Strategy
 
 **Stored in fact table (raw values):**
-- ad_revenue, ad_impressions, ad_clicks
+- ad_revenue, ad_impressions, ad_clicks (AdMob - source of truth)
+- ad_revenue_adjust, ad_impressions_adjust (for reconciliation)
 - installs, clicks, daus
-- network_cost, ad_revenue_d0, ad_impressions_d0
-- paid_impressions, subscrevnt_revenue
+- ad_revenue_d0/d1/d3/d7, ad_impressions_d0/d1/d3/d7 (LTV cohorts)
+- network_cost, paid_impressions, subscrevnt_revenue
 
 **Calculated at query time:**
-- d0_roas, cpi, ecpm, impdau (see METRICS.md)
+- d0_roas, d7_roas, cpi, ecpm, impdau (see METRICS.md)
 
 **Rationale:** Store raw values, calculate aggregates at query time for flexibility.
 
@@ -314,4 +322,5 @@ fa-c002-lab/
 
 | Date | Change |
 |------|--------|
+| Jan 2026 | Added D0-D7 cohort metrics to star schema |
 | Jan 2026 | Consolidated architecture content, added agent architecture |

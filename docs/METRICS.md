@@ -37,13 +37,15 @@ graph TB
 
 | Metric | Formula | Use Case |
 |--------|---------|----------|
-| **d0_roas** | ad_revenue_d0 / network_cost | Profitability indicator |
+| **d0_roas** | ad_revenue_d0 / network_cost | Immediate profitability (70-80% LTV) |
+| **d7_roas** | ad_revenue_d7 / network_cost | Near-complete LTV (~95%) |
 | **cpi** | network_cost / installs | User acquisition cost |
 | **ecpm** | (admob_rev × 1000) / admob_imp | Monetization efficiency |
 | **d0_impdau** | ad_impressions_d0 / daus | User engagement |
 | **ipm** | (installs × 1000) / paid_impressions | Creative quality |
 | **paid_ecpm** | (network_cost × 1000) / paid_impressions | UA cost efficiency |
 | **d0_ltv** | ad_revenue_d0 / installs | Day 0 user value |
+| **d7_ltv** | ad_revenue_d7 / installs | 7-day user value |
 | **iaa_profit** | admob_rev - network_cost | Ad profit |
 | **gross_profit** | admob_rev + subscrevnt_rev - network_cost | Total profit |
 
@@ -55,16 +57,31 @@ graph TB
 
 ```sql
 d0_roas = ad_revenue_d0 / NULLIF(network_cost, 0)
+d1_roas = ad_revenue_d1 / NULLIF(network_cost, 0)
+d3_roas = ad_revenue_d3 / NULLIF(network_cost, 0)
+d7_roas = ad_revenue_d7 / NULLIF(network_cost, 0)
 ```
 
-**Why D0?** 70-80% of lifetime revenue comes from install day.
+**LTV Curve:** Revenue accumulates over time after install.
 
-| Range | Interpretation | Action |
-|-------|----------------|--------|
+```
+D0 (Install day): 70-80% of lifetime value
+D1 (Cumulative):  +8%  → ~85% of LTV
+D3 (Cumulative):  +5%  → ~90% of LTV
+D7 (Cumulative):  +3%  → ~95% of LTV
+```
+
+| D0 ROAS | Interpretation | Action |
+|---------|----------------|--------|
 | > 120% | Excellent | Scale aggressively |
 | 100-120% | Good | Maintain, monitor |
-| 80-100% | Marginal | Check D7 retention |
+| 80-100% | Marginal | Check D7 ROAS - may recover |
 | < 80% | Losing money | Pause or optimize |
+
+**Decision Logic:**
+- D0 ROAS > 100% → Profitable immediately, scale
+- D0 ROAS 80-100% AND D7 ROAS > 100% → Marginally profitable, maintain
+- D0 ROAS < 80% AND D7 ROAS < 100% → Losing money, action needed
 
 **Company target:** 120% D0 ROAS
 
@@ -324,13 +341,19 @@ ORDER BY cpi_headroom DESC;
 | admob_imp | ADMOB_DAILY | AD_IMPRESSIONS |
 | ad_revenue_d0 | ADJUST_DAILY | AD_REVENUE_TOTAL_D0 |
 | ad_impressions_d0 | ADJUST_DAILY | AD_IMPRESSIONS_TOTAL_D0 |
+| ad_revenue_d1 | ADJUST_DAILY | AD_REVENUE_TOTAL_D1 |
+| ad_impressions_d1 | ADJUST_DAILY | AD_IMPRESSIONS_TOTAL_D1 |
+| ad_revenue_d3 | ADJUST_DAILY | AD_REVENUE_TOTAL_D3 |
+| ad_impressions_d3 | ADJUST_DAILY | AD_IMPRESSIONS_TOTAL_D3 |
+| ad_revenue_d7 | ADJUST_DAILY | AD_REVENUE_TOTAL_D7 |
+| ad_impressions_d7 | ADJUST_DAILY | AD_IMPRESSIONS_TOTAL_D7 |
 | network_cost | ADJUST_DAILY | NETWORK_COST |
 | installs | ADJUST_DAILY | INSTALLS |
 | daus | ADJUST_DAILY | DAUS |
 | paid_impressions | ADJUST_DAILY | PAID_IMPRESSIONS |
 | subscrevnt_revenue | ADJUST_DAILY | SUBSCREVNT_REVENUE |
 
-**Note:** AdMob = source of truth for revenue. Adjust = source of truth for attribution and cost.
+**Note:** AdMob = source of truth for revenue. Adjust = source of truth for attribution, cost, and cohort metrics.
 
 ---
 
@@ -338,4 +361,5 @@ ORDER BY cpi_headroom DESC;
 
 | Date | Change |
 |------|--------|
+| Jan 2026 | Added D1, D3, D7 ROAS and LTV curve calculations |
 | Jan 2026 | Created as single source of truth for metrics |

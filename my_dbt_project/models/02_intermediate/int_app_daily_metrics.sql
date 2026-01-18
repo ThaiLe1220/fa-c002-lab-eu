@@ -37,9 +37,15 @@ joined AS (
         COALESCE(adj.clicks, 0) AS clicks,
         COALESCE(adj.daus, 0) AS daus,
 
-        -- D0 metrics (critical for ROAS calculation)
+        -- Cohort metrics (D0, D1, D3, D7 for LTV curve)
         COALESCE(adj.ad_revenue_d0, 0) AS ad_revenue_d0,
         COALESCE(adj.ad_impressions_d0, 0) AS ad_impressions_d0,
+        COALESCE(adj.ad_revenue_d1, 0) AS ad_revenue_d1,
+        COALESCE(adj.ad_impressions_d1, 0) AS ad_impressions_d1,
+        COALESCE(adj.ad_revenue_d3, 0) AS ad_revenue_d3,
+        COALESCE(adj.ad_impressions_d3, 0) AS ad_impressions_d3,
+        COALESCE(adj.ad_revenue_d7, 0) AS ad_revenue_d7,
+        COALESCE(adj.ad_impressions_d7, 0) AS ad_impressions_d7,
 
         -- Cost metrics
         COALESCE(adj.network_cost, 0) AS network_cost,

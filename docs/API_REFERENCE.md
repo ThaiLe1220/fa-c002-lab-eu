@@ -86,7 +86,21 @@ graph LR
 
 ```python
 dimensions = "app,store_id,day,country_code,country,os_name"
-metrics = "installs,daus,ad_revenue,ad_impressions,ad_revenue_total_d0,ad_impressions_total_d0,network_cost"
+metrics = ",".join([
+    # User acquisition
+    "installs", "clicks", "daus",
+    # Revenue (non-cohort)
+    "ad_revenue", "ad_impressions",
+    # Cost
+    "network_cost", "paid_impressions",
+    # D0-D7 Cohort metrics (LTV curve)
+    "ad_revenue_total_D0", "ad_impressions_total_D0",
+    "ad_revenue_total_D1", "ad_impressions_total_D1",
+    "ad_revenue_total_D3", "ad_impressions_total_D3",
+    "ad_revenue_total_D7", "ad_impressions_total_D7",
+    # IAP
+    "subscrevnt_revenue",
+])
 ```
 
 ### Available Dimensions (146 total)
@@ -111,16 +125,20 @@ metrics = "installs,daus,ad_revenue,ad_impressions,ad_revenue_total_d0,ad_impres
 | Retention | retention_d1, retention_d7, retention_d30 |
 | Cohort | cohort_size, cohort_revenue, cohort_ltv |
 
-### D0 Metrics (Critical)
+### Cohort Metrics (D0-D7 for LTV Curve)
 
-| Metric | Description |
-|--------|-------------|
-| ad_revenue_total_d0 | Day 0 ad revenue (70-80% of total) |
-| ad_impressions_total_d0 | Day 0 ad impressions |
-| cohort_size_d0 | Day 0 cohort size |
-| cohort_size_d1 | Day 1 retention |
-| cohort_size_d7 | Day 7 retention |
-| cohort_size_d30 | Day 30 retention |
+| Metric | Description | LTV Contribution |
+|--------|-------------|------------------|
+| ad_revenue_total_D0 | Day 0 ad revenue (install day) | 70-80% |
+| ad_impressions_total_D0 | Day 0 ad impressions | |
+| ad_revenue_total_D1 | Cumulative through day 1 | +8% |
+| ad_impressions_total_D1 | Cumulative impressions through D1 | |
+| ad_revenue_total_D3 | Cumulative through day 3 | +5% |
+| ad_impressions_total_D3 | Cumulative impressions through D3 | |
+| ad_revenue_total_D7 | Cumulative through day 7 | +3% (~95% total) |
+| ad_impressions_total_D7 | Cumulative impressions through D7 | |
+
+**Note:** Adjust supports D0-D120 cohorts. We use D0, D1, D3, D7 for practical LTV analysis.
 
 ### API Limits
 
@@ -205,31 +223,27 @@ metrics = "installs,daus,ad_revenue,retention_d1,retention_d7,ltv,sessions"
 
 ## Data Volume Summary
 
-### Daily Volume
+### Daily Volume (Full Portfolio)
 
-| Source | Rows/Day |
-|--------|----------|
-| AdMob (basic dimensions) | 1,644 |
-| AdMob (with format) | 5,127 |
-| AdMob (with ad_unit) | 13,508 |
-| Adjust (daily) | 2,216 |
-| Adjust (hourly) | 936 |
+| Source | Apps | Countries | Rows/Day |
+|--------|------|-----------|----------|
+| AdMob (3 publishers) | 55 | 225 | ~3,800 |
+| Adjust (1 API key) | 45 | 240 | ~4,200 |
 
-### 90-Day Projection
+### Monthly Projection
 
 | Source | Rows |
 |--------|------|
-| AdMob (full dimensions) | 1.2M |
-| Adjust (daily) | 199K |
-| Adjust (hourly) | 84K |
+| AdMob | ~114K |
+| Adjust | ~126K |
 
 ### Yearly Projection
 
 | Source | Rows/Year |
 |--------|-----------|
-| AdMob | 4.9M |
-| Adjust | 809K |
-| **Total** | 5.7M |
+| AdMob | ~1.4M |
+| Adjust | ~1.5M |
+| **Total** | ~2.9M |
 
 ---
 

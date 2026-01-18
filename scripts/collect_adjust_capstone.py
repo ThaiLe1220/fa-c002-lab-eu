@@ -2,10 +2,11 @@
 """
 Adjust Data Collection - Capstone Version
 
-Collects data with ALL new metrics:
-- D0 columns (ad_revenue_total_D0, ad_impressions_total_D0)
+Collects data with ALL metrics including LTV cohorts:
+- D0, D1, D3, D7 cohort metrics (ad_revenue_total_D0/D1/D3/D7)
 - paid_impressions, subscrevnt_revenue
-- network_cost (was collected but missing in dbt)
+- network_cost for ROAS calculation
+- Full portfolio (all apps, all countries)
 
 Usage:
     python scripts/collect_adjust_capstone.py --days 3
@@ -36,12 +37,8 @@ load_dotenv(dotenv_path=".secret/.env")
 
 console = Console()
 
-# Target apps for capstone (same as midtest for consistency)
-TARGET_APPS = [
-    "video.ai.videogenerator",  # Text to Video FLIX
-    "ai.video.generator.text.video",  # AI GPT Generator
-    "text.to.video.aivideo.generator",  # Text2Pet
-]
+# Full portfolio - no filter, collect all apps
+# Previously filtered to 3 apps for midtest, now collecting everything
 
 # Data directory
 CAPSTONE_DIR = project_root / "data" / "capstone"
@@ -55,8 +52,25 @@ def fetch_adjust_daily(api_token: str, start_date: str, end_date: str) -> pd.Dat
 
     params = {
         "dimensions": "app,store_id,day,country_code,country,os_name",
-        # ALL metrics including new ones
-        "metrics": "installs,clicks,daus,ad_revenue,ad_impressions,network_cost,ad_revenue_total_D0,ad_impressions_total_D0,paid_impressions,subscrevnt_revenue",
+        # ALL metrics including D0, D1, D3, D7 cohorts for LTV curve
+        "metrics": ",".join([
+            # User acquisition
+            "installs", "clicks", "daus",
+            # Revenue (non-cohort)
+            "ad_revenue", "ad_impressions",
+            # Cost
+            "network_cost", "paid_impressions",
+            # D0 cohort (install day)
+            "ad_revenue_total_D0", "ad_impressions_total_D0",
+            # D1 cohort (cumulative through day 1)
+            "ad_revenue_total_D1", "ad_impressions_total_D1",
+            # D3 cohort (cumulative through day 3)
+            "ad_revenue_total_D3", "ad_impressions_total_D3",
+            # D7 cohort (cumulative through day 7)
+            "ad_revenue_total_D7", "ad_impressions_total_D7",
+            # IAP
+            "subscrevnt_revenue",
+        ]),
         "date_period": f"{start_date}:{end_date}",
         "utc_offset": "+00:00",
     }
@@ -70,12 +84,11 @@ def fetch_adjust_daily(api_token: str, start_date: str, end_date: str) -> pd.Dat
         import io
         df = pd.read_csv(io.StringIO(response.text))
 
-        # Filter to target apps only
-        df_filtered = df[df["store_id"].isin(TARGET_APPS)].copy()
-
-        console.print(f"[green]✓ Fetched {len(df_filtered):,} rows for target apps[/green]")
-        console.print(f"[dim]  Columns: {list(df_filtered.columns)}[/dim]")
-        return df_filtered
+        # Full portfolio - no filtering
+        console.print(f"[green]✓ Fetched {len(df):,} rows (all apps)[/green]")
+        console.print(f"[dim]  Apps: {df['store_id'].nunique()} unique[/dim]")
+        console.print(f"[dim]  Columns: {list(df.columns)}[/dim]")
+        return df
 
     except Exception as e:
         console.print(f"[red]✗ API error: {e}[/red]")
@@ -110,10 +123,14 @@ def load_to_snowflake(df: pd.DataFrame):
     df_load["batch_id"] = batch_id
     df_load["loaded_at"] = batch_timestamp
 
-    # Convert numeric columns
+    # Convert numeric columns (including D0, D1, D3, D7 cohorts)
     numeric_cols = [
         "installs", "clicks", "daus", "ad_revenue", "ad_impressions", "network_cost",
-        "ad_revenue_total_D0", "ad_impressions_total_D0", "paid_impressions", "subscrevnt_revenue"
+        "ad_revenue_total_D0", "ad_impressions_total_D0",
+        "ad_revenue_total_D1", "ad_impressions_total_D1",
+        "ad_revenue_total_D3", "ad_impressions_total_D3",
+        "ad_revenue_total_D7", "ad_impressions_total_D7",
+        "paid_impressions", "subscrevnt_revenue"
     ]
     for col in numeric_cols:
         if col in df_load.columns:
@@ -177,7 +194,8 @@ def main():
         Panel.fit(
             f"[bold cyan]Adjust Capstone Pipeline[/bold cyan]\n"
             f"Period: {start_date} to {end_date}\n"
-            f"Apps: {len(TARGET_APPS)} target apps\n"
+            f"Apps: Full portfolio (all apps)\n"
+            f"Cohorts: D0, D1, D3, D7\n"
             f"Schema: RAW_CAPSTONE",
             title="Data Collection",
         )

@@ -36,12 +36,8 @@ load_dotenv(dotenv_path=".secret/.env")
 
 console = Console()
 
-# Target apps for capstone (same as midtest)
-TARGET_APPS = [
-    "video.ai.videogenerator",  # Text to Video FLIX
-    "ai.video.generator.text.video",  # AI GPT Generator
-    "text.to.video.aivideo.generator",  # Text2Pet
-]
+# Full portfolio - no filter, collect all apps
+# Previously filtered to 3 apps for midtest, now collecting everything
 
 # Data directory
 CAPSTONE_DIR = project_root / "data" / "capstone"
@@ -71,7 +67,7 @@ def authenticate_admob(publisher_id: str):
 
 
 def get_approved_apps(service, publisher_id: str) -> dict:
-    """Get approved apps with package IDs from AdMob."""
+    """Get ALL approved apps with package IDs from AdMob."""
     console.print("[cyan]Fetching app metadata...[/cyan]")
 
     valid_apps = {}
@@ -101,24 +97,22 @@ def get_approved_apps(service, publisher_id: str) -> dict:
 
             linked_info = app["linkedAppInfo"]
             if "displayName" in linked_info and "appStoreId" in linked_info:
-                app_store_id = linked_info["appStoreId"]
-                # Filter to target apps only
-                if app_store_id in TARGET_APPS:
-                    valid_apps[app["appId"]] = {
-                        "displayName": linked_info["displayName"],
-                        "appStoreId": app_store_id,
-                    }
+                # Full portfolio - no filter
+                valid_apps[app["appId"]] = {
+                    "displayName": linked_info["displayName"],
+                    "appStoreId": linked_info["appStoreId"],
+                }
 
         next_page_token = response.get("nextPageToken", None)
 
-    console.print(f"[green]✓ Found {len(valid_apps)} target apps[/green]")
+    console.print(f"[green]✓ Found {len(valid_apps)} approved apps[/green]")
     return valid_apps
 
 
 def fetch_admob_raw(
     service, publisher_id: str, start_date: str, end_date: str
 ) -> pd.DataFrame:
-    """Fetch raw AdMob data for target apps only."""
+    """Fetch raw AdMob data for ALL approved apps."""
     console.print(f"[cyan]Fetching AdMob API: {start_date} to {end_date}[/cyan]")
 
     approved_apps = get_approved_apps(service, publisher_id)
@@ -173,8 +167,8 @@ def fetch_admob_raw(
                     internal_app_id = dim.get("APP", {}).get("value")
                     app_info = approved_apps.get(internal_app_id, {})
 
-                    # Only include target apps
-                    if app_info.get("appStoreId") in TARGET_APPS:
+                    # Full portfolio - include all approved apps
+                    if app_info:
                         rows.append(
                             {
                                 "date": dim.get("DATE", {}).get("value"),
@@ -202,7 +196,7 @@ def fetch_admob_raw(
                         )
 
         df = pd.DataFrame(rows)
-        console.print(f"[green]✓ Fetched {len(df):,} rows for target apps[/green]")
+        console.print(f"[green]✓ Fetched {len(df):,} rows (all apps)[/green]")
         return df
 
     except Exception as e:
@@ -317,6 +311,7 @@ def main():
             f"[bold cyan]AdMob Capstone Pipeline[/bold cyan]\n"
             f"Period: {start_date} to {end_date}\n"
             f"Publishers: {len(args.publishers)}\n"
+            f"Apps: Full portfolio (all approved)\n"
             f"Schema: RAW_CAPSTONE",
             title="Data Collection",
         )

@@ -22,7 +22,7 @@ models:
           - not_null
 
   - name: stg_adjust_capstone
-    description: "Staging model for Adjust data with D0 metrics and cost"
+    description: "Staging model for Adjust data with cohort metrics (D0-D7) and cost"
     columns:
       - name: raw_record_id
         description: "Unique record identifier"
@@ -36,9 +36,15 @@ models:
         data_tests:
           - not_null
       - name: ad_revenue_d0
-        description: "Day 0 ad revenue (70-80% of lifetime)"
+        description: "Day 0 ad revenue (install day, 70-80% of lifetime)"
+      - name: ad_revenue_d1
+        description: "Cumulative ad revenue through day 1"
+      - name: ad_revenue_d3
+        description: "Cumulative ad revenue through day 3"
+      - name: ad_revenue_d7
+        description: "Cumulative ad revenue through day 7 (~95% of lifetime)"
       - name: network_cost
-        description: "UA spend"
+        description: "UA spend from ad networks"
 
   # ============ MIDTEST MODELS (deprecated) ============
   - name: stg_admob_midtest

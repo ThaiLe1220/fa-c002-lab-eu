@@ -272,8 +272,13 @@ See `DASHBOARD_SPEC.md` for detailed agent capabilities and phases.
 
 - **No Ad Source breakdown:** Data is total only, not split by Facebook/Google/TikTok
 - **No Ad Unit breakdown:** Cannot differentiate banner vs interstitial vs rewarded
-- **No cohort analysis:** Only daily aggregate, cannot track user cohorts over time
 - **IAP tracking incomplete:** SDK not fully capturing
+
+### Data Capabilities (Supported)
+
+- **LTV cohort analysis:** D0, D1, D3, D7 cohort metrics for revenue and impressions
+- **Full portfolio:** 45+ apps, 240 countries, all platforms
+- **LTV curve:** Can track ~95% of user lifetime value (D0 = 70-80%, D7 cumulative = ~95%)
 
 ### Functional Limitations
 
@@ -284,7 +289,7 @@ See `DASHBOARD_SPEC.md` for detailed agent capabilities and phases.
 ### Future Considerations
 
 - Integrate Ad Source data from Facebook/Google APIs
-- Add cohort tracking (D1, D7, D30 retention)
+- Add D30 retention for long-term cohort tracking
 - Real-time alerting via Slack/Email
 - Action suggestions with confidence scores
 
@@ -331,5 +336,6 @@ From meeting notes, questions she will ask:
 
 | Date | Change |
 |------|--------|
+| Jan 2026 | Updated limitations: D0-D7 cohort analysis now supported |
 | Jan 2026 | Initial creation based on user interviews |
 | Jan 2026 | Restructured: moved metrics to METRICS.md, dashboard details to DASHBOARD_SPEC.md |

@@ -43,7 +43,7 @@ Executive Decision Support Agent for Ameno Technologies. AI chatbot that queries
 |-------|-------------|--------|--------|
 | Phase 0 | API Client + CSV | Done | - |
 | Phase 1-2 | Snowflake + dbt | Done | 30 |
-| Phase 2.5 | dbt Migration (D0 metrics) | **Next** | - |
+| Phase 2.5 | Full Portfolio + LTV Curve (D0-D7) | **In Progress** | - |
 | Phase 3 | Kafka + Airflow | To Do | 15 |
 | Phase 4 | AI Agent | Priority | 20 |
 | Phase 5 | Docs + Demo | To Do | 10 |
@@ -69,12 +69,13 @@ cd my_dbt_project && dbt build
 
 | Metric | Formula | Business Use |
 |--------|---------|--------------|
-| **ROAS** | ad_revenue_d0 / network_cost | Return on ad spend |
+| **D0 ROAS** | ad_revenue_d0 / network_cost | Immediate profitability (70-80% of LTV) |
+| **D7 ROAS** | ad_revenue_d7 / network_cost | Near-complete LTV (~95%) |
 | **CPI** | network_cost / installs | Cost per install |
 | **eCPM** | (ad_revenue / impressions) × 1000 | Ad efficiency |
 | **IMPDAU** | ad_impressions_d0 / daus | Ads per user |
 
-**Business Context:** 70-80% of revenue comes from Day 0 (install day).
+**LTV Curve:** D0 = 70-80%, D1 = +8%, D3 = +5%, D7 = +3% → D7 cumulative ~95% of lifetime value.
 
 ## Documentation
 

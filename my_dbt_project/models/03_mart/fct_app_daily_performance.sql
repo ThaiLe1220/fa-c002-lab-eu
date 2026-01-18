@@ -37,9 +37,15 @@ SELECT
     m.clicks,
     m.daus,
 
-    -- D0 metrics (critical for ROAS)
+    -- Cohort metrics (D0, D1, D3, D7 for LTV curve)
     m.ad_revenue_d0,
     m.ad_impressions_d0,
+    m.ad_revenue_d1,
+    m.ad_impressions_d1,
+    m.ad_revenue_d3,
+    m.ad_impressions_d3,
+    m.ad_revenue_d7,
+    m.ad_impressions_d7,
 
     -- Cost metrics
     m.network_cost,

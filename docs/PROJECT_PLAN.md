@@ -77,7 +77,7 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 |-------|-------------|--------|--------|
 | Phase 0 | API Client + CSV | Done | - |
 | Phase 1-2 | Snowflake + dbt | Done | 30 |
-| Phase 2.5 | dbt Migration (D0 metrics) | **NEXT** | - |
+| Phase 2.5 | Full Portfolio + LTV Curve (D0-D7) | **IN PROGRESS** | - |
 | Phase 3 | Kafka + Airflow (checkbox) | To Do | 15 |
 | Phase 4 | AI Agent | Priority | 20 |
 | Phase 5 | Docs + Demo | To Do | 10 |
@@ -102,24 +102,37 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 
 ---
 
-## Phase 2.5: dbt Migration
+## Phase 2.5: Full Portfolio + LTV Curve
 
-**Prerequisite for AI Agent. Must complete first.**
+**Prerequisite for AI Agent. Extends D0-only to full D0-D7 cohort metrics.**
+
+### What Changed
+
+| Before (Midtest) | After (Capstone) |
+|------------------|------------------|
+| 3 filtered apps | 45+ apps (full portfolio) |
+| D0 metrics only | D0, D1, D3, D7 cohorts |
+| ~1,500 rows/day | ~4,000 rows/day |
 
 ### Checklist
 
-- [ ] Create `stg_admob_capstone.sql` → RAW_CAPSTONE.ADMOB_DAILY
-- [ ] Create `stg_adjust_capstone.sql` → RAW_CAPSTONE.ADJUST_DAILY
-- [ ] Update `int_app_daily_metrics.sql`:
-  - [ ] Add ad_revenue_d0, ad_impressions_d0
-  - [ ] Add network_cost, paid_impressions, subscrevnt_revenue
-  - [ ] Point to new staging models
-- [ ] Update `fct_app_daily_performance.sql`:
-  - [ ] Add D0 metrics columns
-  - [ ] Add d0_revenue_pct calculation
-- [ ] Run `dbt build` - all models pass
-- [ ] Run `dbt test` - all tests pass
-- [ ] Query fact table - verify D0 data exists
+**dbt Models (Completed):**
+- [x] Create `stg_admob_capstone.sql` → RAW_CAPSTONE.ADMOB_DAILY
+- [x] Create `stg_adjust_capstone.sql` → RAW_CAPSTONE.ADJUST_DAILY
+- [x] Add D0, D1, D3, D7 cohort columns to all models
+- [x] Add network_cost, paid_impressions, subscrevnt_revenue
+- [x] Update schema.yml with new column documentation
+
+**Collection Scripts:**
+- [x] Update `collect_adjust_capstone.py` - add D1, D3, D7 metrics
+- [x] Update `collect_adjust_capstone.py` - remove TARGET_APPS filter
+- [ ] Update `collect_admob_capstone.py` - remove TARGET_APPS filter
+
+**Data Load:**
+- [ ] Clear RAW_CAPSTONE tables
+- [ ] Re-collect full portfolio data
+- [ ] Run `dbt build --full-refresh`
+- [ ] Verify data in Snowflake
 
 ### Decision Log
 
@@ -128,7 +141,8 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 | Schema | Star + fact table | Industry standard, good for analytics |
 | Layers | 3 (staging/int/mart) | Clear separation, debuggable |
 | Materialization | Keep incremental | Required by grading |
-| Metrics | Raw in table, aggregate at query | Flexibility for different levels |
+| Cohort metrics | D0, D1, D3, D7 | Covers ~95% of LTV, practical for analysis |
+| Full portfolio | All apps, all countries | Production-realistic data |
 
 ---
 

@@ -27,7 +27,7 @@ models:
           - not_null
 
   - name: fct_app_daily_performance
-    description: "Fact table for daily app performance metrics (star schema)"
+    description: "Fact table for daily app performance metrics with D0 and cost data"
     columns:
       - name: performance_key
         description: "Surrogate key for fact table"
@@ -47,9 +47,32 @@ models:
           - relationships:
               to: ref('dim_dates')
               field: date_key
+      # AdMob metrics (source of truth)
       - name: ad_revenue
+        description: "AdMob revenue in USD (source of truth)"
         data_tests:
           - not_null
+      - name: ad_impressions
+        description: "AdMob ad impressions"
+      - name: ad_clicks
+        description: "AdMob ad clicks"
+      # D0 metrics (critical for ROAS)
+      - name: ad_revenue_d0
+        description: "Day 0 ad revenue (70-80% of lifetime value)"
+      - name: ad_impressions_d0
+        description: "Day 0 ad impressions"
+      # Cost metrics
+      - name: network_cost
+        description: "UA spend from ad networks"
+      - name: paid_impressions
+        description: "Paid UA impressions"
+      # User metrics
       - name: installs
+        description: "New installs"
         data_tests:
           - not_null
+      - name: daus
+        description: "Daily active users"
+      # IAP
+      - name: subscrevnt_revenue
+        description: "In-app purchase revenue"

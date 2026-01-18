@@ -19,20 +19,34 @@ SELECT
     m.country_code,
     m.platform,
 
-    -- AdMob metrics
+    -- AdMob metrics (source of truth for revenue)
     m.ad_revenue,
     m.ad_impressions,
     m.ad_clicks,
+    m.ad_requests,
+    m.matched_requests,
+    m.observed_ecpm,
     {{ calculate_ctr('m.ad_clicks', 'm.ad_impressions') }} AS ad_ctr,
 
-    -- Adjust metrics
+    -- Adjust metrics (for reconciliation)
+    m.ad_revenue_adjust,
+    m.ad_impressions_adjust,
+
+    -- User acquisition metrics
     m.installs,
     m.clicks,
     m.daus,
 
-    -- Calculated metrics
-    m.revenue_per_install,
-    m.revenue_per_click,
+    -- D0 metrics (critical for ROAS)
+    m.ad_revenue_d0,
+    m.ad_impressions_d0,
+
+    -- Cost metrics
+    m.network_cost,
+    m.paid_impressions,
+
+    -- IAP revenue
+    m.subscrevnt_revenue,
 
     m.dbt_updated_at
 FROM metrics m

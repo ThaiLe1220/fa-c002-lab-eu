@@ -7,3 +7,12 @@ sources:
     tables:
       - name: admob_daily_midtest
       - name: adjust_daily_midtest
+
+  - name: raw_capstone
+    database: db_t34
+    schema: raw_capstone
+    tables:
+      - name: admob_daily
+        description: "AdMob revenue data (source of truth for revenue)"
+      - name: adjust_daily
+        description: "Adjust attribution data with D0 metrics and cost"

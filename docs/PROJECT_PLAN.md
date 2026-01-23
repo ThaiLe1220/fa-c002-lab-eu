@@ -7,14 +7,14 @@ graph LR
     subgraph "Done"
         P0[Phase 0<br/>API + CSV]
         P1[Phase 1-2<br/>Snowflake + dbt]
-    end
-
-    subgraph "Current"
         P25[Phase 2.5<br/>dbt Migration]
     end
 
-    subgraph "To Do"
+    subgraph "Current"
         P4[Phase 4<br/>AI Agent]
+    end
+
+    subgraph "To Do"
         P3[Phase 3<br/>Kafka + Airflow]
         P5[Phase 5<br/>Demo]
     end
@@ -24,8 +24,8 @@ graph LR
     P4 --> P5
     P3 --> P5
 
-    style P25 fill:#ffeb3b
-    style P4 fill:#4caf50,color:#fff
+    style P4 fill:#ffeb3b
+    style P25 fill:#4caf50,color:#fff
 ```
 
 **Related docs:**
@@ -77,12 +77,14 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 |-------|-------------|--------|--------|
 | Phase 0 | API Client + CSV | Done | - |
 | Phase 1-2 | Snowflake + dbt | Done | 30 |
-| Phase 2.5 | Full Portfolio + LTV Curve (D0-D7) | **IN PROGRESS** | - |
+| Phase 2.5 | Full Portfolio + LTV Curve (D0-D7) | **COMPLETE** | - |
 | Phase 3 | Kafka + Airflow (checkbox) | To Do | 15 |
-| Phase 4 | AI Agent | Priority | 20 |
+| Phase 4 | AI Agent | **IN PROGRESS** | 20 |
 | Phase 5 | Docs + Demo | To Do | 10 |
 
 **Midterm:** 75/100 | **Final:** January 24, 2026 | **Target:** 80+ points
+
+**Phase 2.5 Results:** 29 days data (Dec 25 → Jan 22), 140K fact rows, 59 apps
 
 ---
 
@@ -126,13 +128,14 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 **Collection Scripts:**
 - [x] Update `collect_adjust_capstone.py` - add D1, D3, D7 metrics
 - [x] Update `collect_adjust_capstone.py` - remove TARGET_APPS filter
-- [ ] Update `collect_admob_capstone.py` - remove TARGET_APPS filter
+- [x] Update `collect_admob_capstone.py` - remove TARGET_APPS filter
+- [x] Implement delete-insert idempotency pattern
 
 **Data Load:**
-- [ ] Clear RAW_CAPSTONE tables
-- [ ] Re-collect full portfolio data
-- [ ] Run `dbt build --full-refresh`
-- [ ] Verify data in Snowflake
+- [x] Clear RAW_CAPSTONE tables
+- [x] Backfill 29 days (Dec 25, 2025 → Jan 22, 2026)
+- [x] Run `dbt build --full-refresh`
+- [x] Verify data in Snowflake (140,546 fact rows)
 
 ### Decision Log
 
@@ -185,18 +188,16 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 
 **This is where business value and extra points come from.**
 
+**Detailed implementation plan:** See `PHASE4_IMPLEMENTATION.md`
+
 ### System 1: Batch Data Querying (Core - 10 pts)
 
 - [ ] `agent/tools/snowflake_tools.py`:
-  - [ ] query_metrics - Execute SQL on fact table
-  - [ ] compare_periods - Compare two time ranges
-  - [ ] drill_down - Breakdown by dimension
-- [ ] Test: Answer chi Linh's 10 questions accurately
+  - [ ] query_snowflake() - Execute SQL on fact table
+- [ ] Test: Answer Chi Linh's 10 questions accurately (8/10 minimum)
 
 ### System 2: RAG Documents (Checkbox - 5 pts)
 
-- [ ] `agent/rag/document_loader.py` - Load PDFs
-- [ ] `agent/rag/vector_store.py` - Embed with Chroma/FAISS
 - [ ] `agent/tools/rag_tools.py` - Retrieval tool
 - [ ] Test: Query a document, get relevant answer
 
@@ -207,13 +208,19 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 
 ### Agent Orchestration (Extra Points)
 
-- [ ] `agent/agent.py` - LangGraph state graph
-- [ ] System prompt with:
-  - [ ] Metric definitions
+- [ ] `agent/agent.py` - LangGraph state graph with tool calling
+- [ ] `agent/prompts.py` - System prompt with:
+  - [ ] Metric definitions (from METRICS.md)
   - [ ] Chi Linh's thresholds
   - [ ] Drill-down hierarchy
 - [ ] Memory for conversation context
-- [ ] `agent/app.py` - Streamlit UI
+- [ ] `agent/app.py` - Streamlit UI for demo
+
+### Verification
+
+- [ ] 8/10 Chi Linh questions pass
+- [ ] Response time < 10s
+- [ ] Demo script rehearsed
 
 See `DASHBOARD_SPEC.md` for detailed capabilities and phases.
 

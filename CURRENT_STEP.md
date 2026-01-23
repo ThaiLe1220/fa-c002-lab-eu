@@ -28,27 +28,27 @@ Build AI chatbot that queries Snowflake data to answer Chi Linh's business quest
 
 ## Phase 4 Tasks
 
-### Priority 1: Snowflake Tool
+### Priority 1: Snowflake Tool - COMPLETE
 
-- [ ] Create `agent/tools/snowflake_tools.py`
-- [ ] Implement `query_snowflake()` function
-- [ ] Test with 5 sample queries
-- [ ] Verify results match direct Snowflake query
+- [x] Create `agent/tools/snowflake_tools.py`
+- [x] Implement `query_snowflake()` function
+- [x] Test with 5 sample queries
+- [x] Verify results match direct Snowflake query
 
-### Priority 2: LangGraph Agent
+### Priority 2: LangGraph Agent - COMPLETE
 
-- [ ] Create `agent/config.py`
-- [ ] Create `agent/prompts.py` with system prompt
-- [ ] Create `agent/agent.py` with StateGraph
-- [ ] Add conversation memory
-- [ ] Test with CLI
+- [x] Create `agent/config.py`
+- [x] Create `agent/prompts.py` with system prompt
+- [x] Create `agent/agent.py` with StateGraph
+- [x] Add conversation memory
+- [x] Test with CLI
 
-### Priority 3: Streamlit UI
+### Priority 3: Streamlit UI - COMPLETE
 
-- [ ] Create `agent/app.py`
-- [ ] Chat interface with history
-- [ ] "Show SQL" toggle
-- [ ] Style for demo
+- [x] Create `agent/app.py`
+- [x] Chat interface with history
+- [ ] "Show SQL" toggle (nice to have)
+- [x] Style for demo
 
 ### Optional: Checkboxes
 
@@ -59,28 +59,37 @@ Build AI chatbot that queries Snowflake data to answer Chi Linh's business quest
 
 ## Verification Checklist
 
-### Chi Linh's Questions (must pass 8/10)
+### Chi Linh's Questions (must pass 8/10) - **9/10 PASSED**
 
 | # | Question | SQL OK | Numbers OK | Pass |
 |---|----------|--------|------------|------|
-| 1 | Which app spends most? Profitable? | [ ] | [ ] | [ ] |
-| 2 | Why did metrics change vs yesterday? | [ ] | [ ] | [ ] |
-| 3 | D0 ROAS by country? | [ ] | [ ] | [ ] |
-| 4 | Revenue breakdown by country? | [ ] | [ ] | [ ] |
-| 5 | Adjust vs AdMob diff %? | [ ] | [ ] | [ ] |
-| 6 | CPI analysis | [ ] | [ ] | [ ] |
-| 7 | Installs over time by country? | [ ] | [ ] | [ ] |
-| 8 | Break-even analysis? | [ ] | [ ] | [ ] |
-| 9 | Can losing app become profitable? | [ ] | [ ] | [ ] |
-| 10 | Top apps by metric? | [ ] | [ ] | [ ] |
+| 1 | Which app spends most? Profitable? | [x] | [x] | [x] |
+| 2 | Why did metrics change vs yesterday? | [x] | [x] | [x] |
+| 3 | D0 ROAS by country? | [x] | [x] | [x] |
+| 4 | Revenue breakdown by country? | [x] | [x] | [x] |
+| 5 | Adjust vs AdMob diff %? | [x] | [x] | [x] |
+| 6 | CPI analysis | [x] | [~] | [~] |
+| 7 | Installs over time by country? | [x] | [x] | [x] |
+| 8 | Break-even analysis? | [x] | [x] | [x] |
+| 9 | Can losing app become profitable? | [x] | [x] | [x] |
+| 10 | Top apps by metric? | [x] | [x] | [x] |
+
+### Additional Tests Passed
+
+- [x] Non-data questions handled gracefully
+- [x] Out-of-range dates handled correctly
+- [x] Conversation memory works (follow-up questions)
+- [x] Actionable recommendations ("which app to turn off")
+- [x] Simulation ("if CPI reduces 20%")
+- [x] Full demo scenario (overview → drill-down → detail)
 
 ### Response Time
 
 | Operation | Target | Actual | Pass |
 |-----------|--------|--------|------|
-| Simple query | < 5s | | [ ] |
-| Aggregation | < 10s | | [ ] |
-| Full conversation | < 20s | | [ ] |
+| Simple query | < 5s | ~3s | [x] |
+| Aggregation | < 10s | ~5s | [x] |
+| Full conversation | < 20s | ~8s | [x] |
 
 ---
 

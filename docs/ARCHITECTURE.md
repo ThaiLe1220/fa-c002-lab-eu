@@ -305,6 +305,54 @@ fa-c002-lab/
 
 ---
 
+## Data Loading Patterns
+
+### Idempotency Strategy: Delete-Insert
+
+**Problem:** Collection scripts use APPEND mode. Running twice = duplicates.
+
+**Solution:** Delete-before-insert for the target date range.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    IDEMPOTENT LOAD PATTERN                      │
+├─────────────────────────────────────────────────────────────────┤
+│  1. DELETE FROM table WHERE date BETWEEN start AND end          │
+│  2. INSERT new data for that range                              │
+│  3. Result: Same data regardless of how many times you run      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Benefits:**
+- Airflow retry → safe (no duplicates)
+- Manual re-run → safe
+- Backfill any date range → just specify dates
+
+**Implementation locations:**
+
+| Component | Pattern |
+|-----------|---------|
+| `collect_adjust_capstone.py` | DELETE + INSERT for date range |
+| `collect_admob_capstone.py` | DELETE + INSERT for date range |
+| `int_app_daily_metrics` | dbt incremental with `unique_key` |
+| Airflow DAG | Passes `execution_date`, relies on script idempotency |
+
+**Commands for common operations:**
+
+```bash
+# Reload yesterday (safe to re-run)
+python scripts/collect_adjust_capstone.py --days 1
+
+# Backfill specific range
+python scripts/collect_adjust_capstone.py --start 2025-12-01 --end 2025-12-31
+
+# Full refresh (truncate + reload)
+TRUNCATE TABLE DB_T34.RAW_CAPSTONE.ADJUST_DAILY;
+python scripts/collect_adjust_capstone.py --start 2025-09-24 --end 2026-01-22
+```
+
+---
+
 ## Key Design Decisions
 
 | Decision | Choice | Reasoning |
@@ -315,6 +363,7 @@ fa-c002-lab/
 | Raw metrics in fact | Yes | Flexibility for aggregations |
 | 3 independent systems | Yes | Simpler implementation, meets requirements |
 | Agent tools separate | Yes | Each system queried independently |
+| Delete-insert pattern | Yes | Idempotent loads, safe retries |
 
 ---
 

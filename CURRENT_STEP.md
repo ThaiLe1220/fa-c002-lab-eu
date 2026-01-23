@@ -147,6 +147,36 @@ The dbt transformation handles data differences correctly:
 
 ## Next Steps
 
-Phase 2.5 complete. Ready for **Phase 4: AI Agent**.
+### Phase 2.5.1: Backfill + Idempotency (Pre-requisite for Phase 4)
+
+**Why:** Current data is only 1 day (Jan 17). Need 4 months for realistic agent demo.
+
+**Target:** Sep 24, 2025 → Jan 22, 2026 (121 days, ~970K rows)
+
+**Tasks:**
+- [ ] Add delete-insert pattern to `collect_adjust_capstone.py`
+- [ ] Add delete-insert pattern to `collect_admob_capstone.py`
+- [ ] Truncate raw tables
+- [ ] Run backfill collection (~30 min)
+- [ ] Run `dbt build --full-refresh`
+- [ ] Verify data range in Snowflake
+
+**Idempotency pattern to implement:**
+```python
+# Before write_pandas(), add:
+cursor.execute(f"""
+    DELETE FROM {table_name}
+    WHERE DAY BETWEEN '{start_date}' AND '{end_date}'
+""")
+```
+
+**Benefits:**
+- Safe Airflow retries (no duplicates)
+- Safe manual re-runs
+- Easy backfill for any date range
+
+---
+
+### Then: Phase 4 - AI Agent
 
 See `docs/PROJECT_PLAN.md` for Phase 4 checklist.

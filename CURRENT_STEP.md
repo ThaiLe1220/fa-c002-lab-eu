@@ -151,13 +151,29 @@ The dbt transformation handles data differences correctly:
 
 **Why:** Current data is only 1 day (Jan 17). Need 4 months for realistic agent demo.
 
-**Target:** Sep 24, 2025 → Jan 22, 2026 (121 days, ~970K rows)
+**Target:** Sep 24, 2025 → Jan 22, 2026 (120 days, ~960K rows)
+
+**Credit cost:** ~0.1 credits (have 9.98 remaining, ~300 full refreshes possible)
+
+---
+
+**Demo Timeline:**
+
+```
+NOW (Jan 23)                         DEMO DAY (Jan 24, 1pm)
+─────────────────────────────────────────────────────────────
+Backfill: Sep 24 → Jan 22            Morning (~9am): Collect Jan 23
+Test with Jan 22 data only           Run dbt --full-refresh
+DON'T touch Jan 23 data              Demo with fresh "yesterday" data
+```
+
+---
 
 **Tasks:**
 - [ ] Add delete-insert pattern to `collect_adjust_capstone.py`
 - [ ] Add delete-insert pattern to `collect_admob_capstone.py`
 - [ ] Truncate raw tables
-- [ ] Run backfill collection (~30 min)
+- [ ] Run backfill: Sep 24, 2025 → Jan 22, 2026
 - [ ] Run `dbt build --full-refresh`
 - [ ] Verify data range in Snowflake
 
@@ -170,10 +186,12 @@ cursor.execute(f"""
 """)
 ```
 
-**Benefits:**
-- Safe Airflow retries (no duplicates)
-- Safe manual re-runs
-- Easy backfill for any date range
+**Demo day commands (Jan 24 morning):**
+```bash
+python scripts/collect_adjust_capstone.py --start 2026-01-23 --end 2026-01-23
+python scripts/collect_admob_capstone.py --start 2026-01-23 --end 2026-01-23
+dbt build --full-refresh
+```
 
 ---
 

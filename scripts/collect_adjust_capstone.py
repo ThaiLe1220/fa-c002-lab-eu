@@ -108,8 +108,8 @@ def save_to_csv(df: pd.DataFrame, start_date: str, end_date: str):
     return filename
 
 
-def load_to_snowflake(df: pd.DataFrame):
-    """Load to Snowflake RAW_CAPSTONE.ADJUST_DAILY."""
+def load_to_snowflake(df: pd.DataFrame, start_date: str, end_date: str):
+    """Load to Snowflake RAW_CAPSTONE.ADJUST_DAILY with delete-insert pattern."""
     if df.empty:
         console.print("[yellow]⚠ No data to load[/yellow]")
         return
@@ -144,7 +144,19 @@ def load_to_snowflake(df: pd.DataFrame):
 
     try:
         conn = client.connect()
+        cursor = conn.cursor()
 
+        # DELETE existing data for date range (idempotency)
+        delete_sql = f"""
+            DELETE FROM DB_T34.RAW_CAPSTONE.ADJUST_DAILY
+            WHERE DAY BETWEEN '{start_date}' AND '{end_date}'
+        """
+        console.print(f"[cyan]Deleting existing data for {start_date} to {end_date}...[/cyan]")
+        cursor.execute(delete_sql)
+        deleted_rows = cursor.rowcount
+        console.print(f"[dim]  Deleted {deleted_rows:,} existing rows[/dim]")
+
+        # INSERT new data
         console.print(f"[cyan]Loading {len(df_load):,} rows to RAW_CAPSTONE.ADJUST_DAILY...[/cyan]")
 
         from snowflake.connector.pandas_tools import write_pandas
@@ -215,8 +227,8 @@ def main():
             # Save to CSV
             save_to_csv(df, start_date, end_date)
 
-            # Load to Snowflake
-            load_to_snowflake(df)
+            # Load to Snowflake (with delete-insert for idempotency)
+            load_to_snowflake(df, start_date, end_date)
 
             console.print(
                 Panel.fit(

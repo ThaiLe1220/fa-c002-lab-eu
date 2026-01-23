@@ -151,7 +151,7 @@ The dbt transformation handles data differences correctly:
 
 **Why:** Current data is only 1 day (Jan 17). Need 4 months for realistic agent demo.
 
-**Target:** Sep 24, 2025 → Jan 22, 2026 (120 days, ~960K rows)
+**Target:** Dec 25, 2025 → Jan 22, 2026 (29 days, ~230K rows)
 
 **Credit cost:** ~0.1 credits (have 9.98 remaining, ~300 full refreshes possible)
 
@@ -172,10 +172,11 @@ DON'T touch Jan 23 data              Demo with fresh "yesterday" data
 **Tasks:**
 - [ ] Add delete-insert pattern to `collect_adjust_capstone.py`
 - [ ] Add delete-insert pattern to `collect_admob_capstone.py`
-- [ ] Truncate raw tables
-- [ ] Run backfill: Sep 24, 2025 → Jan 22, 2026
+- [ ] Truncate raw tables (clean slate)
+- [ ] Run full backfill: Sep 24, 2025 → Jan 22, 2026
 - [ ] Run `dbt build --full-refresh`
 - [ ] Verify data range in Snowflake
+- [ ] Test idempotency: re-run Jan 20-22, verify no duplicates
 
 **Idempotency pattern to implement:**
 ```python
@@ -186,12 +187,80 @@ cursor.execute(f"""
 """)
 ```
 
+**Execution order (revised - two-phase approach):**
+
+```
+Phase 1: Fetch to local CSV (safe, resumable)
+──────────────────────────────────────────────
+Step 1: ✅ Implement delete-insert in both scripts
+Step 2: ✅ TRUNCATE raw tables (clean slate)
+Step 3: Add --fetch-only flag to collection scripts
+Step 4: Run Adjust fetch day-by-day → data/capstone/adjust_YYYY-MM-DD.csv
+Step 5: Run AdMob fetch day-by-day → data/capstone/admob_YYYY-MM-DD.csv
+        (~1-2 hrs total, resumable if fails)
+
+Phase 2: Bulk upload to Snowflake (fast)
+──────────────────────────────────────────────
+Step 6: Bulk upload all CSVs to Snowflake (~5 min)
+Step 7: dbt build --full-refresh
+Step 8: Verify data range in Snowflake
+
+Phase 3: Test idempotency
+──────────────────────────────────────────────
+Step 9: Record baseline row counts for Jan 20-22
+Step 10: Re-run collection for Jan 20-22
+Step 11: Verify row counts unchanged → idempotency proven
+```
+
+**Why two-phase:**
+- API calls are slow and can timeout
+- CSV first = no data loss if API fails mid-way
+- Can resume from last successful day
+- Bulk upload is fast and atomic
+
 **Demo day commands (Jan 24 morning):**
 ```bash
 python scripts/collect_adjust_capstone.py --start 2026-01-23 --end 2026-01-23
 python scripts/collect_admob_capstone.py --start 2026-01-23 --end 2026-01-23
 dbt build --full-refresh
 ```
+
+---
+
+## Data Usage Guide
+
+### Query data (for AI Agent)
+
+```sql
+-- Example: Top apps by revenue last 7 days
+SELECT a.app_name, SUM(f.ad_revenue) as revenue, SUM(f.network_cost) as cost
+FROM fct_app_daily_performance f
+JOIN dim_apps a ON f.app_key = a.app_key
+JOIN dim_dates d ON f.date_key = d.date_key
+WHERE d.date >= DATEADD(day, -7, CURRENT_DATE())
+GROUP BY a.app_name
+ORDER BY revenue DESC;
+```
+
+Agent just needs a Snowflake tool that executes SQL → returns results → LLM formats answer.
+
+### Retry/Rerun any date (safe - idempotent)
+
+```bash
+# Rerun single day
+python scripts/collect_adjust_capstone.py --start 2026-01-22 --end 2026-01-22
+python scripts/collect_admob_capstone.py --start 2026-01-22 --end 2026-01-22
+dbt build --full-refresh
+
+# Rerun date range
+python scripts/collect_adjust_capstone.py --start 2026-01-15 --end 2026-01-22
+python scripts/collect_admob_capstone.py --start 2026-01-15 --end 2026-01-22
+dbt build --full-refresh
+```
+
+- Delete-insert pattern = no duplicates
+- Run same date 10 times → same result
+- Airflow DAG just calls these scripts daily
 
 ---
 

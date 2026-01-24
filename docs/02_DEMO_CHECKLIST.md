@@ -70,7 +70,26 @@ docker exec capstone-postgres psql -U capstone -d streaming -c "SELECT COUNT(*) 
 
 ---
 
-### Step 3: Generate Initial Alerts (Safe to retry - append only)
+### Step 3: Start Kafka Consumer (Must run before producer)
+
+```bash
+# Start consumer in background (reads Kafka, writes to PostgreSQL)
+uv run python kafka/consumer.py &
+
+# Wait for consumer to connect
+sleep 5
+```
+
+**VERIFY:**
+```bash
+ps aux | grep "kafka/consumer" | grep -v grep
+```
+
+**Expected:** Shows consumer process running
+
+---
+
+### Step 4: Generate Initial Alerts (Safe to retry - append only)
 
 ```bash
 uv run python kafka/producer.py --batch 30 --interval 0
@@ -83,11 +102,11 @@ docker exec capstone-postgres psql -U capstone -d streaming -c "SELECT COUNT(*) 
 
 **Expected:** count = 30
 
-**If fails:** Just run producer again. Alerts append, don't overwrite.
+**If fails:** Check consumer is running, then run producer again.
 
 ---
 
-### Step 4: Verify Snowflake Connection (Read-only, safe)
+### Step 5: Verify Snowflake Connection (Read-only, safe)
 
 ```bash
 uv run python -c "
@@ -108,7 +127,7 @@ print('Snowflake OK')
 
 ---
 
-### Step 5: Verify Agent Works (Read-only, safe)
+### Step 6: Verify Agent Works (Read-only, safe)
 
 ```bash
 uv run python -m agent.agent -q "What is 2+2?" 2>/dev/null | tail -5
@@ -122,6 +141,7 @@ uv run python -m agent.agent -q "What is 2+2?" 2>/dev/null | tail -5
 
 Before starting demo, confirm:
 - [ ] 5 Docker containers running
+- [ ] Consumer process running
 - [ ] 30 alerts in PostgreSQL
 - [ ] Snowflake connection works
 - [ ] Agent responds
@@ -499,6 +519,8 @@ cd kafka && docker-compose down 2>/dev/null; docker-compose up -d; cd ..
 cd airflow && docker-compose down 2>/dev/null; docker-compose up -d; cd ..
 sleep 30
 docker exec capstone-postgres psql -U capstone -d streaming -c "DROP TABLE IF EXISTS alerts; CREATE TABLE alerts (id UUID PRIMARY KEY, timestamp TIMESTAMP NOT NULL, alert_type VARCHAR(50) NOT NULL, severity VARCHAR(20) NOT NULL, message TEXT NOT NULL, region VARCHAR(10), value NUMERIC(10,2), created_at TIMESTAMP DEFAULT NOW()); CREATE INDEX idx_alerts_created_at ON alerts(created_at DESC);"
+uv run python kafka/consumer.py &  # Start consumer first!
+sleep 5
 uv run python kafka/producer.py --batch 30 --interval 0
 
 # === VERIFY SETUP ===

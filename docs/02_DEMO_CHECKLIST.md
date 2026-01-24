@@ -142,7 +142,17 @@ uv run python -m agent.agent -q "What is 2+2?" 2>/dev/null | tail -5
 If you tested the flow already, reset to clean state:
 
 ```bash
-# Delete Jan 23 from RAW tables
+# 1. Kill background processes
+pkill -f "kafka/consumer" 2>/dev/null
+pkill -f streamlit 2>/dev/null
+
+# 2. Clean up CI trigger comment from dim_dates.sql
+cd my_dbt_project/models/03_mart
+# Remove any "-- demo run" lines added during testing
+grep -v "^-- demo run" dim_dates.sql > dim_dates_clean.sql && mv dim_dates_clean.sql dim_dates.sql
+cd ../../..
+
+# 3. Delete Jan 23 from RAW tables
 uv run python -c "
 from scripts.utils.snowflake_client import get_snowflake_client
 client = get_snowflake_client(schema='RAW_CAPSTONE')
@@ -155,8 +165,11 @@ print(f'Deleted {cursor.rowcount} from ADJUST_DAILY')
 client.close()
 "
 
-# Rebuild ANALYTICS (back to Jan 22 state)
+# 4. Rebuild ANALYTICS (back to Jan 22 state)
 cd my_dbt_project && dbt build --full-refresh && cd ..
+
+# 5. Commit clean state (optional)
+git checkout my_dbt_project/models/03_mart/dim_dates.sql
 ```
 
 **VERIFY:**
@@ -165,6 +178,8 @@ cd my_dbt_project && dbt build --full-refresh && cd ..
 SELECT MAX(DATE) FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY;
 SELECT MAX(DATE) FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE;
 ```
+
+**After reset, continue with BEFORE DEMO section to start fresh.**
 
 ---
 

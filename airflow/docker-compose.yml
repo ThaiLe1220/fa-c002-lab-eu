@@ -19,13 +19,17 @@ x-airflow-common: &airflow-common
     - SNOWFLAKE_ROLE=${SNOWFLAKE_ROLE:-RL_T34}
     - SNOWFLAKE_WAREHOUSE=${SNOWFLAKE_WAREHOUSE:-WH_T34}
     - SNOWFLAKE_DATABASE=${SNOWFLAKE_DATABASE:-DB_T34}
-    - SNOWFLAKE_SCHEMA=${SNOWFLAKE_SCHEMA:-PUBLIC}
+    - SNOWFLAKE_SCHEMA=${SNOWFLAKE_SCHEMA:-ANALYTICS}
     - SNOWFLAKE_PRIVATE_KEY_PATH=/opt/airflow/keys/rsa_key.p8
   volumes:
     - ./dags:/opt/airflow/dags
     - ../my_dbt_project:/opt/airflow/dbt_project
     - ~/.snowflake/keys:/opt/airflow/keys:ro
     - ./profiles.yml:/opt/airflow/.dbt/profiles.yml:ro
+    # Data collection scripts and credentials
+    - ../scripts:/opt/airflow/scripts:ro
+    - ../.secret:/opt/airflow/.secret:ro
+    - ../data:/opt/airflow/data
   depends_on:
     postgres:
       condition: service_healthy

@@ -13,5 +13,17 @@ RUN pip install --no-cache-dir \
     dbt-snowflake==1.7.0 \
     cryptography>=41.0.0
 
-# Set dbt profiles directory
+# Install data collection dependencies
+RUN pip install --no-cache-dir \
+    google-api-python-client \
+    google-auth \
+    google-auth-oauthlib \
+    pandas \
+    rich \
+    python-dotenv \
+    snowflake-connector-python \
+    requests
+
+# Set environment variables
 ENV DBT_PROFILES_DIR=/opt/airflow/.dbt
+ENV PYTHONPATH=/opt/airflow

@@ -5,6 +5,7 @@ Provides reusable connection and data loading functions following
 M01W03 lab pattern.
 """
 
+import os
 from typing import Optional
 import pandas as pd
 from cryptography.hazmat.primitives import serialization
@@ -14,6 +15,9 @@ from snowflake.connector.pandas_tools import write_pandas
 from rich.console import Console
 
 console = Console()
+
+# Default key path - can be overridden by environment variable
+DEFAULT_KEY_PATH = "/Users/lehongthai/.snowflake/keys/rsa_key.p8"
 
 
 class SnowflakeClient:
@@ -27,7 +31,7 @@ class SnowflakeClient:
         database: str = "DB_T34",
         schema: str = "RAW",
         role: str = "RL_T34",
-        private_key_path: str = "/Users/lehongthai/.snowflake/keys/rsa_key.p8",
+        private_key_path: str = None,
     ):
         """Initialize Snowflake client with JWT authentication."""
 
@@ -37,7 +41,12 @@ class SnowflakeClient:
         self.database = database
         self.schema = schema
         self.role = role
-        self.private_key_path = private_key_path
+        # Use environment variable if set, otherwise use provided path or default
+        self.private_key_path = (
+            private_key_path
+            or os.environ.get("SNOWFLAKE_PRIVATE_KEY_PATH")
+            or DEFAULT_KEY_PATH
+        )
         self.connection = None
 
     def connect(self):

@@ -7,11 +7,9 @@ Data & AI Engineering Capstone - Foundry AI Academy
 Executive Decision Support Agent for Ameno Technologies. AI chatbot that queries real mobile app revenue data (AdMob + Adjust) to answer business questions for executives without SQL knowledge.
 
 **Primary User:** Chi Linh (Business Performance Controller)
-**Deadline:** January 24, 2026
+**Demo:** January 24, 2026
 
 ## Architecture
-
-**Three Independent Systems → One Agent**
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -21,6 +19,7 @@ Executive Decision Support Agent for Ameno Technologies. AI chatbot that queries
 │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐          │
 │  │ Snowflake   │   │   Kafka     │   │    RAG      │          │
 │  │   Tool      │   │   Tool      │   │   Tool      │          │
+│  │   DONE      │   │   TO DO     │   │   TO DO     │          │
 │  └─────────────┘   └─────────────┘   └─────────────┘          │
 └─────────────────────────────────────────────────────────────────┘
         │                    │                    │
@@ -30,10 +29,10 @@ Executive Decision Support Agent for Ameno Technologies. AI chatbot that queries
 │  Batch Data   │   │  Streaming    │   │  Documents    │
 ├───────────────┤   ├───────────────┤   ├───────────────┤
 │ Real AdMob/   │   │ Simulated     │   │ PDF docs      │
-│ Adjust data   │   │ metrics       │   │ Vector store  │
+│ Adjust data   │   │ metrics       │   │ FAISS store   │
 │ Snowflake     │   │ Local Kafka   │   │               │
 │ dbt transform │   │               │   │               │
-│ CORE VALUE    │   │ CHECKBOX      │   │ CHECKBOX      │
+│ DONE          │   │ TO DO         │   │ TO DO         │
 └───────────────┘   └───────────────┘   └───────────────┘
 ```
 
@@ -41,14 +40,15 @@ Executive Decision Support Agent for Ameno Technologies. AI chatbot that queries
 
 | Phase | Description | Status | Points |
 |-------|-------------|--------|--------|
-| Phase 0 | API Client + CSV | Done | - |
-| Phase 1-2 | Snowflake + dbt | Done | 30 |
-| Phase 2.5 | Full Portfolio + LTV Curve (D0-D7) | **In Progress** | - |
-| Phase 3 | Kafka + Airflow | To Do | 15 |
-| Phase 4 | AI Agent | Priority | 20 |
-| Phase 5 | Docs + Demo | To Do | 10 |
+| Phase 0 | API Client + CSV | DONE | - |
+| Phase 1-2 | Snowflake + dbt | DONE | 30 |
+| Phase 2.5 | Full Portfolio (29 days, 140K rows) | DONE | - |
+| Phase 4 | AI Agent (Snowflake Tool) | DONE | 10 |
+| Phase 3 | Kafka + Airflow | **IN PROGRESS** | 15 |
+| Phase 4 | RAG Tool | **TO DO** | 10 |
+| Extra | dbt Macros, Data Quality, etc. | **TO DO** | 20-40 |
 
-**Midterm:** 75/100 | **Target:** 80+ points
+**Current:** ~55 pts | **Target:** 85+ pts | **Midterm:** 75/100
 
 ## Quick Start
 
@@ -57,104 +57,103 @@ Executive Decision Support Agent for Ameno Technologies. AI chatbot that queries
 cd /Users/lehongthai/code_personal/fa-c002-lab
 source .venv/bin/activate
 
-# Data collection
-python scripts/collect_adjust_capstone.py --days 3
-python scripts/collect_admob_capstone.py --days 3
+# Run AI Agent (Streamlit)
+uv run streamlit run agent/app.py
+
+# Run AI Agent (CLI)
+uv run python -m agent.agent
 
 # dbt pipeline
 cd my_dbt_project && dbt build
 ```
 
+## Data Stats
+
+| Metric | Value |
+|--------|-------|
+| Date Range | Dec 25, 2025 → Jan 22, 2026 |
+| Apps | 59 |
+| Fact Rows | 140,546 |
+| Total Revenue | $251,878 |
+| Total Cost | $245,940 |
+
 ## Key Metrics
 
 | Metric | Formula | Business Use |
 |--------|---------|--------------|
-| **D0 ROAS** | ad_revenue_d0 / network_cost | Immediate profitability (70-80% of LTV) |
-| **D7 ROAS** | ad_revenue_d7 / network_cost | Near-complete LTV (~95%) |
+| **D0 ROAS** | ad_revenue_d0 / network_cost | Immediate profitability |
+| **D7 ROAS** | ad_revenue_d7 / network_cost | Near-complete LTV |
 | **CPI** | network_cost / installs | Cost per install |
 | **eCPM** | (ad_revenue / impressions) × 1000 | Ad efficiency |
-| **IMPDAU** | ad_impressions_d0 / daus | Ads per user |
-
-**LTV Curve:** D0 = 70-80%, D1 = +8%, D3 = +5%, D7 = +3% → D7 cumulative ~95% of lifetime value.
-
-## Documentation
-
-```mermaid
-graph TB
-    subgraph "Start Here"
-        README[README.md<br/>Entry Point]
-        PLAN[PROJECT_PLAN.md<br/>What To Do]
-    end
-
-    subgraph "Understand The Problem"
-        AGENT_SPEC[AI_AGENT_SPEC.md<br/>Who & Why]
-        DASHBOARD[DASHBOARD_SPEC.md<br/>What To Build]
-    end
-
-    subgraph "Technical Details"
-        ARCH[ARCHITECTURE.md<br/>How It Works]
-        SCHEMA[DATA_SCHEMA.md<br/>Tables & SQL]
-        METRICS[METRICS.md<br/>Formulas]
-    end
-
-    subgraph "Reference"
-        SETUP[SETUP.md<br/>Environment]
-        API[API_REFERENCE.md<br/>APIs]
-    end
-
-    README --> PLAN
-    PLAN --> AGENT_SPEC
-    AGENT_SPEC --> DASHBOARD
-    DASHBOARD --> ARCH
-    ARCH --> SCHEMA
-    SCHEMA --> METRICS
-    PLAN --> SETUP
-    SCHEMA --> API
-```
-
-| Doc | Purpose |
-|-----|---------|
-| [PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | Phases, status, execution checklists |
-| [AI_AGENT_SPEC.md](docs/AI_AGENT_SPEC.md) | User context (chi Linh), requirements |
-| [DASHBOARD_SPEC.md](docs/DASHBOARD_SPEC.md) | 10 tabs mapping, MVP flow, agent phases |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture, 3 systems |
-| [DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | Snowflake tables, SQL examples |
-| [METRICS.md](docs/METRICS.md) | All metric formulas (single source) |
-| [SETUP.md](docs/SETUP.md) | Environment setup |
-| [API_REFERENCE.md](docs/API_REFERENCE.md) | AdMob/Adjust API details |
 
 ## Project Structure
 
 ```
 fa-c002-lab/
-├── agent/                    # AI Agent [To Do]
-│   ├── tools/                # Snowflake, Kafka, RAG tools
-│   └── app.py                # Streamlit UI
-├── kafka/                    # Streaming [To Do]
-│   └── docker-compose.yml
-├── dags/                     # Airflow [To Do]
-│   └── dbt_pipeline.py
-├── my_dbt_project/           # dbt models
-│   └── models/
-│       ├── 01_staging/
-│       ├── 02_intermediate/
-│       └── 03_mart/
-├── scripts/                  # Data collection
+├── agent/                    # AI Agent [DONE]
+│   ├── config.py             # OpenAI config
+│   ├── prompts.py            # System prompt
+│   ├── agent.py              # LangGraph agent
+│   ├── app.py                # Streamlit UI
+│   └── tools/
+│       ├── snowflake_tools.py  # [DONE]
+│       ├── kafka_tools.py      # [TO DO]
+│       └── rag_tools.py        # [TO DO]
+├── kafka/                    # Streaming [TO DO]
+│   ├── docker-compose.yml
+│   ├── producer.py
+│   └── consumer.py
+├── airflow/                  # Orchestration [TO DO]
+│   ├── docker-compose.yml
+│   └── dags/
+│       └── dbt_pipeline.py
+├── my_dbt_project/           # dbt models [DONE]
+│   ├── models/
+│   │   ├── 01_staging/
+│   │   ├── 02_intermediate/
+│   │   └── 03_mart/
+│   └── macros/
+├── scripts/                  # Data collection [DONE]
 │   ├── collect_adjust_capstone.py
 │   └── collect_admob_capstone.py
 └── docs/                     # Documentation
+    ├── PROJECT_PLAN.md
+    ├── IMPLEMENTATION_PRIORITY.md  # Execution plan
+    ├── EXTRA_FEATURES_PLAN.md      # Extra features
+    ├── AGENT_GUIDE.md              # How agent works
+    └── ...
 ```
+
+## Documentation
+
+| Doc | Purpose |
+|-----|---------|
+| [CURRENT_STEP.md](CURRENT_STEP.md) | What to do NOW |
+| [IMPLEMENTATION_PRIORITY.md](docs/IMPLEMENTATION_PRIORITY.md) | Detailed execution plan |
+| [EXTRA_FEATURES_PLAN.md](docs/EXTRA_FEATURES_PLAN.md) | Extra features with code |
+| [PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | Phases and status |
+| [AGENT_GUIDE.md](docs/AGENT_GUIDE.md) | How agent works (high to low) |
+| [AI_AGENT_SPEC.md](docs/AI_AGENT_SPEC.md) | User context (Chi Linh) |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture |
+| [DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | Snowflake tables |
 
 ## Tech Stack
 
+- **Python 3.12** + **uv** - Package management
 - **dbt** - SQL transformations
 - **Snowflake** - Data warehouse (`DB_T34`)
-- **Python** - API collection, AI agent
 - **LangGraph** - AI agent framework
-- **Kafka** - Streaming (checkbox)
-- **Airflow** - Orchestration
+- **OpenAI GPT-4o-mini** - LLM
 - **Streamlit** - UI
+- **Kafka** - Streaming (checkbox)
+- **Airflow** - Orchestration (checkbox)
+- **FAISS** - Vector store for RAG
+
+## CI/CD
+
+- **GitHub Actions** - dbt CI (SQLFluff + dbt test)
+- See `.github/workflows/dbt_ci.yml`
 
 ---
 
-**Last Updated:** January 2026
+**Last Updated:** January 24, 2026

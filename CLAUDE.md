@@ -92,6 +92,7 @@ gh run list --limit 3
 | `docs/03_DATA_PIPELINE.md` | Data flow, dbt models, Airflow |
 | `docs/04_AGENT.md` | AI agent, 3 tools, RAG implementation |
 | `docs/05_EXTRA_FEATURES.md` | Optional features for extra points |
+| `docs/06_ADVANCED_FEATURES.md` | **NEGOTIATION** - Advanced implementations for extra points |
 </documentation>
 
 <agent-tools>

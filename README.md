@@ -31,6 +31,7 @@ uv run streamlit run agent/app.py
 | [03_DATA_PIPELINE.md](docs/03_DATA_PIPELINE.md) | Data flow, dbt models, reasoning |
 | [04_AGENT.md](docs/04_AGENT.md) | AI agent, tools, RAG |
 | [05_EXTRA_FEATURES.md](docs/05_EXTRA_FEATURES.md) | Optional features (TODO) |
+| [06_ADVANCED_FEATURES.md](docs/06_ADVANCED_FEATURES.md) | **Advanced implementations beyond requirements** |
 
 ---
 

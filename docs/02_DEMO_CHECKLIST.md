@@ -1,451 +1,204 @@
-# Demo Checklist - Execute From Scratch
+# Demo Checklist (30 Minutes)
 
-Safe, idempotent commands. Can retry any step without breaking things.
+**Goal:** Prove every `#live-demo` requirement with BEFORE/AFTER evidence.
 
 ---
 
-## BEFORE DEMO (Run This First)
-
-### Step 0: Go to Project Directory
+## PRE-DEMO SETUP (5 min before)
 
 ```bash
 cd ~/code_personal/fa-c002-lab
-```
 
----
-
-### Step 1: Reset & Start Docker (Safe to retry)
-
-```bash
-# Stop everything first (safe even if not running)
-cd kafka && docker-compose down 2>/dev/null; cd ..
-cd airflow && docker-compose down 2>/dev/null; cd ..
-
-# Start fresh
+# Start all services
 cd kafka && docker-compose up -d && cd ..
 cd airflow && docker-compose up -d && cd ..
-
-# Wait 30 seconds for services to initialize
 sleep 30
-```
 
-**VERIFY:**
-```bash
-docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "capstone|airflow"
-```
-
-**Expected:** 5 containers (capstone-kafka, capstone-postgres, airflow-webserver, airflow-scheduler, airflow-postgres)
-
-**If fails:** Run the stop/start commands again. Docker is idempotent.
-
----
-
-### Step 2: Reset Alerts Table (Safe to retry)
-
-```bash
-# Drop and recreate alerts table (clean slate)
+# Reset alerts table
 docker exec capstone-postgres psql -U capstone -d streaming -c "
 DROP TABLE IF EXISTS alerts;
 CREATE TABLE alerts (
-    id UUID PRIMARY KEY,
-    timestamp TIMESTAMP NOT NULL,
-    alert_type VARCHAR(50) NOT NULL,
-    severity VARCHAR(20) NOT NULL,
-    message TEXT NOT NULL,
-    region VARCHAR(10),
-    value NUMERIC(10,2),
+    id UUID PRIMARY KEY, timestamp TIMESTAMP NOT NULL,
+    alert_type VARCHAR(50) NOT NULL, severity VARCHAR(20) NOT NULL,
+    message TEXT NOT NULL, region VARCHAR(10), value NUMERIC(10,2),
     created_at TIMESTAMP DEFAULT NOW()
-);
-CREATE INDEX idx_alerts_created_at ON alerts(created_at DESC);
-CREATE INDEX idx_alerts_severity ON alerts(severity);
-"
-```
+);"
 
-**VERIFY:**
-```bash
-docker exec capstone-postgres psql -U capstone -d streaming -c "SELECT COUNT(*) FROM alerts;"
-```
-
-**Expected:** count = 0
-
----
-
-### Step 3: Start Kafka Consumer (Must run before producer)
-
-```bash
-# Start consumer in background (reads Kafka, writes to PostgreSQL)
+# Start consumer (background)
 uv run python kafka/consumer.py &
-
-# Wait for consumer to connect
 sleep 5
+
+# Generate initial alerts
+uv run python kafka/producer.py --batch 20 --interval 0
 ```
 
-**VERIFY:**
-```bash
-ps aux | grep "kafka/consumer" | grep -v grep
-```
-
-**Expected:** Shows consumer process running
+**Verify:** `docker ps | grep -E "capstone|airflow" | wc -l` → Should be 5
 
 ---
 
-### Step 4: Generate Initial Alerts (Safe to retry - append only)
-
-```bash
-uv run python kafka/producer.py --batch 30 --interval 0
-```
-
-**VERIFY:**
-```bash
-docker exec capstone-postgres psql -U capstone -d streaming -c "SELECT COUNT(*) FROM alerts;"
-```
-
-**Expected:** count = 30
-
-**If fails:** Check consumer is running, then run producer again.
-
----
-
-### Step 5: Verify Snowflake Connection (Read-only, safe)
-
-```bash
-uv run python -c "
-from scripts.utils.snowflake_client import get_snowflake_client
-client = get_snowflake_client(schema='RAW_CAPSTONE')
-conn = client.connect()
-cursor = conn.cursor()
-cursor.execute('SELECT COUNT(*) FROM ADMOB_DAILY')
-print(f'ADMOB_DAILY rows: {cursor.fetchone()[0]}')
-cursor.execute('SELECT MAX(DATE) FROM ADMOB_DAILY')
-print(f'Latest date: {cursor.fetchone()[0]}')
-client.close()
-print('Snowflake OK')
-"
-```
-
-**Expected:** Shows row count and latest date
-
----
-
-### Step 6: Verify Agent Works (Read-only, safe)
-
-```bash
-uv run python -m agent.agent -q "What is 2+2?" 2>/dev/null | tail -5
-```
-
-**Expected:** Agent responds (tests OpenAI API key)
-
----
-
-## RESET AFTER TESTING (Run before actual demo)
-
-If you tested the flow already, reset to clean state:
-
-```bash
-# 1. Kill background processes
-pkill -f "kafka/consumer" 2>/dev/null
-pkill -f streamlit 2>/dev/null
-
-# 2. Clean up CI trigger comment from dim_dates.sql
-cd my_dbt_project/models/03_mart
-# Remove any "-- demo run" lines added during testing
-grep -v "^-- demo run" dim_dates.sql > dim_dates_clean.sql && mv dim_dates_clean.sql dim_dates.sql
-cd ../../..
-
-# 3. Delete Jan 23 from RAW tables
-uv run python -c "
-from scripts.utils.snowflake_client import get_snowflake_client
-client = get_snowflake_client(schema='RAW_CAPSTONE')
-conn = client.connect()
-cursor = conn.cursor()
-cursor.execute(\"DELETE FROM ADMOB_DAILY WHERE DATE = '20260123'\")
-print(f'Deleted {cursor.rowcount} from ADMOB_DAILY')
-cursor.execute(\"DELETE FROM ADJUST_DAILY WHERE DAY = '2026-01-23'\")
-print(f'Deleted {cursor.rowcount} from ADJUST_DAILY')
-client.close()
-"
-
-# 4. Rebuild ANALYTICS (back to Jan 22 state)
-cd my_dbt_project && dbt build --full-refresh && cd ..
-
-# 5. Commit clean state (optional)
-git checkout my_dbt_project/models/03_mart/dim_dates.sql
-```
-
-**VERIFY:**
-```sql
--- In Snowflake: should show Jan 22 as latest
-SELECT MAX(DATE) FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY;
-SELECT MAX(DATE) FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE;
-```
-
-**After reset, continue with BEFORE DEMO section to start fresh.**
-
----
-
-## Pre-Demo Checklist
-
-Before starting demo, confirm:
-- [ ] 5 Docker containers running
-- [ ] Consumer process running
-- [ ] 30 alerts in PostgreSQL
-- [ ] Snowflake connection works
-- [ ] Agent responds
-
----
-
-# DEMO EXECUTION (30 minutes)
-
----
-
-## Phase 1: Real-time Pipeline (5 min)
+## PHASE 1: Real-time Pipeline (5 min)
 
 ### 1.1 Trigger CI/CD (1 min)
 
-**SAY:** "First, I'll trigger CI/CD to run in background"
-
-**EXECUTE:**
 ```bash
-# Add comment to SQL file (CI only triggers on .sql or my_dbt_project/** changes)
-echo "-- demo run $(date)" >> my_dbt_project/models/03_mart/dim_dates.sql
-git add my_dbt_project/
-git commit -m "demo: trigger CI $(date +%H:%M)"
-git push
+echo "-- demo $(date)" >> my_dbt_project/models/03_mart/dim_dates.sql
+git add my_dbt_project/ && git commit -m "demo: trigger CI" && git push
 ```
 
-**VERIFY:**
-```bash
-gh run list --limit 1
-```
-
-**Expected:** Shows "in_progress"
-
-**SAY:** "CI is running SQLFluff and dbt tests. Let's continue."
+**SAY:** "CI running in background - SQLFluff + dbt tests. We'll check results later."
 
 ---
 
-### 1.2 Kafka Demo (3 min)
+### 1.2 Kafka Streaming Demo (3 min)
 
-**SAY:** "Now real-time streaming with Kafka"
+**BEFORE - Show current state:**
+```bash
+docker exec capstone-postgres psql -U capstone -d streaming -c "SELECT COUNT(*) as before_count FROM alerts;"
+```
 
-**EXECUTE:**
+**EXECUTE - Produce 5 alerts with visible timestamps:**
 ```bash
 uv run python kafka/producer.py --batch 5 --interval 2
 ```
 
-**Shows:** 5 alerts produced with 2-second gaps
-
-**VERIFY:**
+**AFTER - Prove data landed < 5 min latency:**
 ```bash
-docker exec capstone-postgres psql -U capstone -d streaming -c \
-  "SELECT alert_type, severity, region, created_at FROM alerts ORDER BY created_at DESC LIMIT 5;"
+docker exec capstone-postgres psql -U capstone -d streaming -c "
+SELECT COUNT(*) as after_count FROM alerts;
+SELECT alert_type, severity, region, created_at
+FROM alerts ORDER BY created_at DESC LIMIT 5;"
 ```
 
-**SAY:** "See the timestamps? Data landed in PostgreSQL via Kafka consumer."
-
-**If fails:**
-```bash
-# Restart Kafka stack
-cd kafka && docker-compose restart && cd ..
-sleep 10
-# Try producer again
-uv run python kafka/producer.py --batch 5 --interval 0
-```
+**SAY:** "Count increased. Timestamps show < 1 second latency. Kafka → Consumer → PostgreSQL working."
 
 ---
 
-### 1.3 CI Results (1 min)
+### 1.3 CI/CD Results (1 min)
 
-**EXECUTE:**
 ```bash
 gh run list --limit 1
+gh run view --log 2>&1 | grep -E "PASS|Completed|SQLFluff" | tail -10
 ```
 
-**If completed, show full log:**
-```bash
-# Get latest run ID and show log
-gh run view --log | tail -100
-```
-
-**Or show specific sections:**
-```bash
-# Show SQLFluff results
-gh run view --log | grep -A 5 "SQLFluff"
-
-# Show dbt test results
-gh run view --log | grep -E "PASS|FAIL|ERROR|Completed" | tail -20
-```
-
-**SAY:** "26 dbt tests passed. SQLFluff checked code quality."
-
-**If still running:** "CI still running, let's check later" (move on)
-
-**If need to show previous successful run:**
-```bash
-gh run list --limit 5
-gh run view <RUN_ID> --log | tail -100
-```
+**SAY:** "SQLFluff passed. 26 dbt tests passed."
 
 ---
 
-## Phase 2: Batch Pipeline (5 min)
+## PHASE 2: Batch Pipeline (5 min)
 
-### 2.1 Show Current Data (1 min)
+### 2.1 Show BEFORE State (1 min)
 
-**SAY:** "Let me show current data state in Snowflake"
-
-**EXECUTE (in Snowflake UI):**
+**In Snowflake UI - Copy these results:**
 ```sql
+-- RAW layer state BEFORE
 SELECT
+    COUNT(*) as row_count,
     MAX(DATE) as latest_date,
-    COUNT(*) as total_rows,
     MAX(LOADED_AT) as last_loaded
 FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY;
 ```
 
-**Write down the values** (to compare after collection)
+**SAY:** "Current state: X rows, latest date is Jan 22, loaded at [timestamp]."
 
 ---
 
 ### 2.2 Run Batch Collection (2 min)
 
-**SAY:** "Now I'll collect yesterday's data from APIs"
-
-**EXECUTE:**
 ```bash
-# Collect yesterday only (idempotent - delete then insert)
 uv run python scripts/collect_admob_capstone.py --days 1
 ```
 
-**Shows:**
-```
-Deleting existing data for 2026-01-23...
-Loading X rows to RAW_CAPSTONE.ADMOB_DAILY...
-✓ Loaded X rows
-```
+**Shows:** `Deleting... Loading X rows... ✓ Loaded`
 
-**EXECUTE:**
-```bash
-uv run python scripts/collect_adjust_capstone.py --days 1
-```
-
-**VERIFY (in Snowflake UI):**
+**IMMEDIATELY in Snowflake - Prove NEW data:**
 ```sql
--- Show fresh data with new timestamp
+-- Show AFTER state
+SELECT
+    COUNT(*) as row_count,
+    MAX(DATE) as latest_date,
+    MAX(LOADED_AT) as last_loaded
+FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY;
+
+-- Show SPECIFIC new rows (bulletproof proof)
 SELECT RAW_RECORD_ID, DATE, APP_STORE_ID, LOADED_AT
 FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY
-WHERE LOADED_AT > DATEADD(minute, -5, CURRENT_TIMESTAMP())
-ORDER BY LOADED_AT DESC
+WHERE LOADED_AT > DATEADD(minute, -2, CURRENT_TIMESTAMP())
 LIMIT 5;
 ```
 
-**SAY:** "See LOADED_AT? Fresh data from API. Delete-insert ensures idempotency."
-
-**If API fails:** "API occasionally times out. Data was collected earlier today." (show existing data)
+**SAY:** "Row count changed. New date Jan 23. LOADED_AT is NOW. These RAW_RECORD_IDs are brand new."
 
 ---
 
 ### 2.3 Run dbt via Airflow (2 min)
 
-**SAY:** "Now Airflow orchestrates dbt transformation"
-
-**EXECUTE:** Open http://localhost:8080
-- Login: admin / admin
-- Find DAG: `capstone_dbt_pipeline`
-- Click play button → "Trigger DAG"
-
-**Or via CLI:**
+**Trigger:**
 ```bash
 docker exec airflow-webserver airflow dags unpause capstone_dbt_pipeline
 docker exec airflow-webserver airflow dags trigger capstone_dbt_pipeline
-# Check status:
+```
+
+**While waiting, show in Snowflake:**
+```sql
+-- BEFORE dbt run
+SELECT COUNT(*) as before_count FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE;
+```
+
+**Check Airflow status:**
+```bash
 docker exec airflow-webserver airflow dags list-runs -d capstone_dbt_pipeline -o table
 ```
 
-**While waiting, show (in Snowflake UI):**
+**After success, show in Snowflake:**
 ```sql
-SELECT TABLE_NAME, ROW_COUNT
-FROM DB_T34.INFORMATION_SCHEMA.TABLES
-WHERE TABLE_SCHEMA = 'ANALYTICS'
-ORDER BY TABLE_NAME;
-```
+-- AFTER dbt run (incremental proof)
+SELECT COUNT(*) as after_count FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE;
 
-**SAY:** "dbt transforms raw → staging → intermediate → mart"
-
-**After Airflow completes (or while running), show:**
-```sql
--- Query with proper dimension join
-SELECT
-    d.DATE,
-    a.APP_NAME,
-    SUM(f.AD_REVENUE) as AD_REVENUE,
-    SUM(f.NETWORK_COST) as NETWORK_COST,
-    ROUND(SUM(f.AD_REVENUE_D0) / NULLIF(SUM(f.NETWORK_COST), 0) * 100, 2) as D0_ROAS_PCT
+-- Show new data with DBT_UPDATED_AT
+SELECT d.DATE, a.APP_NAME, f.AD_REVENUE, f.DBT_UPDATED_AT
 FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE f
 JOIN DB_T34.ANALYTICS.DIM_DATES d ON f.DATE_KEY = d.DATE_KEY
 JOIN DB_T34.ANALYTICS.DIM_APPS a ON f.APP_KEY = a.APP_KEY
-WHERE d.DATE = (SELECT MAX(DATE) FROM DB_T34.ANALYTICS.DIM_DATES)
-GROUP BY d.DATE, a.APP_NAME
-ORDER BY AD_REVENUE DESC
-LIMIT 5;
+WHERE f.DBT_UPDATED_AT > DATEADD(minute, -5, CURRENT_TIMESTAMP())
+ORDER BY f.DBT_UPDATED_AT DESC LIMIT 5;
 ```
 
-**If Airflow fails:** Run dbt directly:
-```bash
-cd my_dbt_project && dbt build --select "stg_admob_capstone stg_adjust_capstone int_app_daily_metrics fct_app_daily_performance" && cd ..
-```
+**SAY:** "Airflow orchestrated dbt. Row count increased. Incremental - not full refresh. No duplicates."
 
 ---
 
-## Phase 3: AI Agent & RAG (10 min)
+## PHASE 3: AI Agent & RAG (10 min)
 
-### 3.1 Show RAG Source (2 min)
+### 3.1 Show RAG Document (1 min)
 
-**SAY:** "Agent uses RAG for business rules"
-
-**EXECUTE:**
 ```bash
-head -40 docs/business_rules/ameno_business_rules.md
+head -50 docs/business_rules/ameno_business_rules.md
 ```
 
-**SAY:** "This document has ROAS thresholds, CPI benchmarks. RAG chunks and embeds it."
-
-**Optional - show chunking:**
-```bash
-uv run python agent/rag_demo.py
-# Press 2 for chunking demo
-```
+**SAY:** "Business rules doc with ROAS thresholds. Chunked and embedded in FAISS vector store."
 
 ---
 
-### 3.2 Start Agent UI (1 min)
+### 3.2 Start Agent (1 min)
 
-**EXECUTE:**
 ```bash
 uv run streamlit run agent/app.py &
 sleep 3
 open http://localhost:8501
 ```
 
-**If port busy:**
-```bash
-# Kill existing streamlit
-pkill -f streamlit
-uv run streamlit run agent/app.py &
-```
-
 ---
 
-### 3.3 Query: Batch Data (2 min)
+### 3.3 Demo: Batch Data Query (2 min)
 
 **ASK AGENT:**
 ```
-What's our total revenue yesterday?
+What's our total revenue for the latest date?
 ```
 
-**VERIFY (in Snowflake):**
+**VERIFY in Snowflake:**
 ```sql
-SELECT SUM(f.AD_REVENUE)
+SELECT SUM(f.AD_REVENUE) as total
 FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE f
 JOIN DB_T34.ANALYTICS.DIM_DATES d ON f.DATE_KEY = d.DATE_KEY
 WHERE d.DATE = (SELECT MAX(DATE) FROM DB_T34.ANALYTICS.DIM_DATES);
@@ -455,173 +208,124 @@ WHERE d.DATE = (SELECT MAX(DATE) FROM DB_T34.ANALYTICS.DIM_DATES);
 
 ---
 
-### 3.4 Query: Streaming Data (2 min)
+### 3.4 Demo: Real-time Data Query (2 min)
 
 **ASK AGENT:**
 ```
-Show me recent alerts
+Show me recent critical alerts
 ```
 
 **VERIFY:**
 ```bash
 docker exec capstone-postgres psql -U capstone -d streaming -c \
-  "SELECT alert_type, severity, region, created_at FROM alerts ORDER BY created_at DESC LIMIT 5;"
+  "SELECT alert_type, severity, region FROM alerts WHERE severity='critical' ORDER BY created_at DESC LIMIT 5;"
 ```
 
-**SAY:** "Agent queried PostgreSQL where Kafka writes alerts."
+**SAY:** "Agent queried PostgreSQL streaming data. Same alerts."
 
 ---
 
-### 3.5 Query: RAG (2 min)
+### 3.5 Demo: RAG Document Query (2 min)
 
 **ASK AGENT:**
 ```
-What is the ROAS threshold for campaigns?
+What is the ROAS threshold for scaling campaigns?
 ```
 
 **VERIFY:**
 ```bash
-grep -i "roas.*threshold\|threshold.*roas\|below.*%" docs/business_rules/ameno_business_rules.md | head -3
+grep -A 5 "ROAS Thresholds" docs/business_rules/ameno_business_rules.md
 ```
 
-**SAY:** "Agent searched vector store, found relevant business rules."
+**SAY:** "Agent searched vector store. Found business rules - 80% threshold."
 
 ---
 
-### 3.6 Query: Combined (1 min)
+### 3.6 Demo: Combined Query + Memory (2 min)
 
-**ASK AGENT:**
+**ASK AGENT (tests memory + combined sources):**
 ```
-Which apps are losing money based on our thresholds?
+Based on our thresholds, which apps from yesterday are losing money?
 ```
 
-**SAY:** "Agent combined Snowflake metrics + RAG thresholds to identify issues."
+**SAY:** "Agent combined: Snowflake metrics + RAG thresholds. Shows apps with D0 ROAS < 80%."
+
+**FOLLOW-UP (tests conversation memory):**
+```
+What should we do about the worst performing one?
+```
+
+**SAY:** "Agent remembered context. Recommended action based on business rules."
 
 ---
 
-## Phase 4: Extra & Q&A (10 min)
+## PHASE 4: Q&A Prep (10 min)
 
-### 4.1 Show Incremental (2 min)
-
-**EXECUTE:**
-```bash
-grep -A 5 "is_incremental" my_dbt_project/models/02_intermediate/int_app_daily_metrics.sql
-```
-
-**SAY:** "Incremental model - only processes new dates, not full rebuild."
-
----
-
-### 4.2 Show dbt Tests (2 min)
-
-**EXECUTE:**
-```bash
-cd my_dbt_project && dbt test --select "stg_admob_capstone" 2>&1 | tail -15 && cd ..
-```
-
-**SAY:** "Tests validate not_null, unique constraints. 26 tests total."
-
----
-
-### 4.3 Q&A Answers
+### Quick Answers
 
 | Question | Answer |
 |----------|--------|
-| Why FAISS? | Free, local, works offline. Good for small docs. |
-| Why delete-insert? | Idempotent. Safe to retry. |
-| Why D0 ROAS? | 70-80% of lifetime revenue on install day. |
-| API fails? | CSV backup in `data/capstone/`. |
-| Table dropped? | `UNDROP TABLE` or Time Travel. |
+| Why star schema? | Industry standard for analytics. Optimized for aggregations. |
+| Why incremental? | Efficient - only process new data. See `{% if is_incremental() %}` |
+| Why FAISS not Pinecone? | Free, local, works offline. Good for small docs. |
+| Why delete-insert? | Idempotent. Safe to retry. No duplicates. |
+| What if API fails? | Retry logic. Can re-run same day safely. |
+| What if table dropped? | Snowflake Time Travel: `UNDROP TABLE` |
+
+### Show Incremental Code
+
+```bash
+grep -A 3 "is_incremental" my_dbt_project/models/02_intermediate/int_app_daily_metrics.sql
+```
+
+### Show dbt Tests
+
+```bash
+cd my_dbt_project && dbt test --select "stg_admob_capstone" 2>&1 | tail -10
+```
 
 ---
 
-## KNOWN FIXES APPLIED
+## EMERGENCY FIXES
 
-These fixes have already been applied to the codebase:
-
-1. **Airflow Dockerfile** - Added `git` installation (required for `dbt debug`)
-2. **dbt_pipeline.py** - Added PATH environment variable for dbt binary location
-3. **DAG schedule** - Set to `None` (manual trigger only for demo)
-4. **Timezone** - Set to `Asia/Ho_Chi_Minh`
-
-If Airflow containers are rebuilt, these fixes are already in the code.
-
----
-
-## EMERGENCY COMMANDS
-
-### Docker broken:
+**Kafka broken:**
 ```bash
 cd kafka && docker-compose down -v && docker-compose up -d && cd ..
+```
+
+**Airflow broken:**
+```bash
 cd airflow && docker-compose down -v && docker-compose up -d && cd ..
-sleep 30
 ```
 
-### PostgreSQL alerts missing:
+**Agent won't start:**
 ```bash
-# Recreate table + generate alerts
-docker exec capstone-postgres psql -U capstone -d streaming -c "DROP TABLE IF EXISTS alerts; CREATE TABLE alerts (id UUID PRIMARY KEY, timestamp TIMESTAMP NOT NULL, alert_type VARCHAR(50) NOT NULL, severity VARCHAR(20) NOT NULL, message TEXT NOT NULL, region VARCHAR(10), value NUMERIC(10,2), created_at TIMESTAMP DEFAULT NOW());"
-uv run python kafka/producer.py --batch 30 --interval 0
+pkill -f streamlit && uv run streamlit run agent/app.py
 ```
 
-### Snowflake table dropped:
-```sql
-UNDROP TABLE DB_T34.RAW_CAPSTONE.ADMOB_DAILY;
--- Or restore from 5 min ago:
-CREATE OR REPLACE TABLE DB_T34.RAW_CAPSTONE.ADMOB_DAILY
-CLONE DB_T34.RAW_CAPSTONE.ADMOB_DAILY AT(OFFSET => -300);
-```
-
-### Agent won't start:
+**dbt fails:**
 ```bash
-# Check API key
-grep OPENAI .env
-
-# Kill existing
-pkill -f streamlit
-pkill -f "agent.agent"
-
-# Restart
-uv run streamlit run agent/app.py
-```
-
-### dbt fails:
-```bash
-cd my_dbt_project
-dbt clean  # Clear cache
-dbt deps   # Reinstall packages
-dbt build  # Rebuild
-cd ..
+cd my_dbt_project && dbt clean && dbt deps && dbt build
 ```
 
 ---
 
-## QUICK COPY-PASTE BLOCK
+## GRADING CHECKLIST
 
-```bash
-# === SETUP (run once before demo) ===
-cd ~/code_personal/fa-c002-lab
-cd kafka && docker-compose down 2>/dev/null; docker-compose up -d; cd ..
-cd airflow && docker-compose down 2>/dev/null; docker-compose up -d; cd ..
-sleep 30
-docker exec capstone-postgres psql -U capstone -d streaming -c "DROP TABLE IF EXISTS alerts; CREATE TABLE alerts (id UUID PRIMARY KEY, timestamp TIMESTAMP NOT NULL, alert_type VARCHAR(50) NOT NULL, severity VARCHAR(20) NOT NULL, message TEXT NOT NULL, region VARCHAR(10), value NUMERIC(10,2), created_at TIMESTAMP DEFAULT NOW()); CREATE INDEX idx_alerts_created_at ON alerts(created_at DESC);"
-uv run python kafka/consumer.py &  # Start consumer first!
-sleep 5
-uv run python kafka/producer.py --batch 30 --interval 0
-
-# === VERIFY SETUP ===
-docker ps | grep -E "capstone|airflow" | wc -l  # Should be 5
-docker exec capstone-postgres psql -U capstone -d streaming -c "SELECT COUNT(*) FROM alerts;"  # Should be 30
-
-# === PHASE 1: STREAMING ===
-uv run python kafka/producer.py --batch 5 --interval 2
-docker exec capstone-postgres psql -U capstone -d streaming -c "SELECT alert_type, severity, region, created_at FROM alerts ORDER BY created_at DESC LIMIT 5;"
-
-# === PHASE 2: BATCH ===
-uv run python scripts/collect_admob_capstone.py --days 1
-uv run python scripts/collect_adjust_capstone.py --days 1
-
-# === PHASE 3: AGENT ===
-uv run streamlit run agent/app.py &
-# Questions: "total revenue yesterday?", "recent alerts?", "ROAS threshold?"
-```
+| Requirement | Demo Proof |
+|-------------|------------|
+| ✅ Batch data source | AdMob API → Snowflake RAW |
+| ✅ Streaming < 5 min | Kafka timestamps show < 1s |
+| ✅ Airflow 3+ tasks | debug → run → test |
+| ✅ `#live-demo` NEW data | BEFORE/AFTER row count + RAW_RECORD_ID |
+| ✅ Star schema | dim_apps, dim_dates, fct_* |
+| ✅ dbt incremental | Row count increase, no duplicates |
+| ✅ dbt test | 26 tests pass |
+| ✅ `#live-demo` dbt via Airflow | Trigger + success |
+| ✅ CI/CD 2 checks | SQLFluff + dbt test |
+| ✅ README + Architecture | README.md exists |
+| ✅ Chatbot with memory | Multi-turn conversation |
+| ✅ RAG documents | Business rules query |
+| ✅ Batch data query | Snowflake revenue |
+| ✅ Real-time query | PostgreSQL alerts |
+| ✅ Combined query | Metrics + thresholds |

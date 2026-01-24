@@ -37,17 +37,56 @@ uv run streamlit run agent/app.py
 ## Architecture
 
 ```
-User → AI Agent → ┌── query_snowflake ────────► Snowflake (batch)
-                  ├── query_realtime_alerts ──► PostgreSQL (streaming)
-                  └── search_business_documents ► FAISS (RAG)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            MOBILE ANALYTICS AI PLATFORM                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                   │
+│  │   AdMob API  │    │  Adjust API  │    │ Kafka Producer│                   │
+│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘                   │
+│         │                   │                   │                            │
+│         ▼                   ▼                   ▼                            │
+│  ┌─────────────────────────────────┐    ┌─────────────┐                     │
+│  │      Snowflake RAW_CAPSTONE     │    │    Kafka    │                     │
+│  │  (ADMOB_DAILY, ADJUST_DAILY)    │    │   (KRaft)   │                     │
+│  └──────────────┬──────────────────┘    └──────┬──────┘                     │
+│                 │                              │                             │
+│                 ▼                              ▼                             │
+│  ┌─────────────────────────────────┐    ┌─────────────┐                     │
+│  │    Airflow (dbt orchestration)  │    │  Consumer   │                     │
+│  │   debug → run → test            │    └──────┬──────┘                     │
+│  └──────────────┬──────────────────┘           │                            │
+│                 │                              ▼                             │
+│                 ▼                       ┌─────────────┐                      │
+│  ┌─────────────────────────────────┐   │ PostgreSQL  │                      │
+│  │     Snowflake ANALYTICS         │   │  (alerts)   │                      │
+│  │  (fct_app_daily_performance,    │   └──────┬──────┘                      │
+│  │   dim_apps, dim_dates)          │          │                             │
+│  └──────────────┬──────────────────┘          │                             │
+│                 │                              │                             │
+│                 └──────────┬──────────────────┘                             │
+│                            │                                                 │
+│                            ▼                                                 │
+│  ┌─────────────────────────────────────────────────────────────────┐        │
+│  │                        AI AGENT (LangGraph)                      │        │
+│  │  ┌─────────────────┬─────────────────┬─────────────────┐        │        │
+│  │  │ query_snowflake │ query_realtime  │ search_business │        │        │
+│  │  │   (batch data)  │ _alerts (stream)│ _documents (RAG)│        │        │
+│  │  └─────────────────┴─────────────────┴─────────────────┘        │        │
+│  └──────────────────────────────┬──────────────────────────────────┘        │
+│                                 │                                            │
+│                                 ▼                                            │
+│                    ┌─────────────────────────┐                              │
+│                    │   Streamlit UI / CLI    │                              │
+│                    │      (User Interface)   │                              │
+│                    └─────────────────────────┘                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Data Flow:**
-```
-AdMob/Adjust APIs → Python Scripts → Snowflake RAW → dbt → ANALYTICS
-Kafka Producer → Kafka → Consumer → PostgreSQL alerts
-Business Rules Doc → FAISS Vector Store → RAG Search
-```
+**Data Flow Summary:**
+- **Batch:** AdMob/Adjust APIs → Python Scripts → Snowflake RAW → dbt → ANALYTICS
+- **Streaming:** Kafka Producer → Kafka → Consumer → PostgreSQL alerts
+- **RAG:** Business Rules Doc → FAISS Vector Store → Semantic Search
 
 ---
 
@@ -77,7 +116,7 @@ gh run list --limit 3
 | Streamlit | http://localhost:8501 | - |
 | Airflow | http://localhost:8080 | admin / admin |
 | Kafka | localhost:29092 | - |
-| PostgreSQL (streaming) | localhost:5433 | postgres / postgres |
+| PostgreSQL (streaming) | localhost:5433 | capstone / capstone123 |
 
 ---
 

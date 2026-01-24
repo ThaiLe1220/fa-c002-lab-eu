@@ -158,14 +158,14 @@ Before starting demo, confirm:
 
 **SAY:** "First, I'll trigger CI/CD to run in background"
 
-**EXECUTE:**
+**Option A: Manual trigger from GitHub UI (easiest)**
+1. Go to https://github.com/ThaiLe1220/fa-c002-lab-eu/actions
+2. Click "dbt CI Pipeline"
+3. Click "Run workflow" → "Run workflow"
+
+**Option B: CLI trigger**
 ```bash
-# Create temp file, commit, push, delete (triggers CI)
-echo "# Demo run $(date)" > DEMO_TRIGGER.md
-git add DEMO_TRIGGER.md
-git commit -m "demo: trigger CI $(date +%H:%M)"
-git push
-rm DEMO_TRIGGER.md
+gh workflow run dbt_ci.yml
 ```
 
 **VERIFY:**
@@ -173,11 +173,11 @@ rm DEMO_TRIGGER.md
 gh run list --limit 1
 ```
 
-**Expected:** Shows "in_progress"
+**Expected:** Shows "in_progress" or "completed success"
 
-**SAY:** "CI is running SQLFluff and dbt tests. Let's continue."
+**SAY:** "CI runs SQLFluff and dbt tests. Let's continue."
 
-**If fails:** Skip CI demo, show last successful run: `gh run view 21308310114`
+**If fails:** Just show last successful run: `gh run view --log | tail -20`
 
 ---
 

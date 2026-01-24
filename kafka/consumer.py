@@ -70,7 +70,7 @@ def main():
             auto_offset_reset='earliest',
             enable_auto_commit=True,
             group_id='alert-consumer-group',
-            consumer_timeout_ms=-1,  # Infinite timeout (block forever)
+            consumer_timeout_ms=30000,  # 30 second timeout (for batch processing)
         )
         print("✅ Connected to Kafka successfully!")
     except KafkaError as e:

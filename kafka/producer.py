@@ -63,8 +63,14 @@ def generate_alert() -> dict:
     }
 
 
-def main():
-    """Main producer loop."""
+def main(batch_count: int = 0, interval: int = 10):
+    """
+    Main producer loop.
+
+    Args:
+        batch_count: If > 0, send this many alerts and exit. If 0, run forever.
+        interval: Seconds between alerts (default 10, use 0 for batch mode)
+    """
     print("Connecting to Kafka...")
 
     try:
@@ -80,7 +86,10 @@ def main():
         print("Make sure Kafka is running: docker-compose up -d")
         return
 
-    print("\nStarting alert producer (Ctrl+C to stop)...")
+    if batch_count > 0:
+        print(f"\nSending {batch_count} alerts in batch mode...")
+    else:
+        print("\nStarting alert producer (Ctrl+C to stop)...")
     print("-" * 50)
 
     count = 0
@@ -108,8 +117,14 @@ def main():
             except KafkaError as e:
                 print(f"Failed to send message: {e}")
 
+            # Check if batch mode is done
+            if batch_count > 0 and count >= batch_count:
+                print(f"\nBatch complete. Sent {count} alerts.")
+                break
+
             # Wait before next alert
-            time.sleep(10)
+            if interval > 0:
+                time.sleep(interval)
 
     except KeyboardInterrupt:
         print(f"\n\nStopping producer. Sent {count} alerts.")
@@ -118,4 +133,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Kafka alerts producer")
+    parser.add_argument("--batch", "-b", type=int, default=0,
+                        help="Send this many alerts and exit (0 = run forever)")
+    parser.add_argument("--interval", "-i", type=int, default=10,
+                        help="Seconds between alerts (default 10)")
+
+    args = parser.parse_args()
+    main(batch_count=args.batch, interval=args.interval)

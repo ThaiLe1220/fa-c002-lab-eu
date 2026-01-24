@@ -27,8 +27,10 @@ Data Engineering Partner. Help Thai complete the capstone project. Focus on prac
 
 **Architecture:** Three independent systems → One agent
 - System 1: Batch data (Snowflake + dbt) - DONE
-- System 2: Streaming (Kafka) - TO DO (checkbox)
-- System 3: RAG (PDF docs) - TO DO (checkbox)
+- System 2: Streaming (Kafka → PostgreSQL) - TO DO (checkbox)
+  - Fake alerts (SPEND_SPIKE, ROAS_DROP, etc.) - NOT related to batch data
+  - Producer → Kafka → Consumer → PostgreSQL → Agent queries
+- System 3: RAG (PDF docs + FAISS) - TO DO (checkbox)
 
 **Schema:**
 - Raw: `DB_T34.RAW_CAPSTONE` (ADJUST_DAILY, ADMOB_DAILY)

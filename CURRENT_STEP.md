@@ -94,13 +94,20 @@
 
 ### Step 1: Kafka (NOW)
 
+**Architecture:** Producer → Kafka → Consumer → PostgreSQL → Agent queries
+
 ```bash
 mkdir -p kafka
-# Create docker-compose.yml (KRaft mode)
-# Create producer.py (fake metrics)
-# Create consumer.py
-# Test: docker-compose up
+# Create docker-compose.yml (Kafka + PostgreSQL)
+# Create producer.py (fake alerts: SPEND_SPIKE, ROAS_DROP, etc.)
+# Create consumer.py (writes alerts to PostgreSQL)
+# Test: docker-compose up, then run producer + consumer
 ```
+
+**Data: Alerts (unrelated to batch Snowflake data)**
+- SPEND_SPIKE, ROAS_DROP, INSTALL_SURGE, ERROR_RATE
+- Stored in PostgreSQL `streaming.alerts` table
+- Agent queries PostgreSQL, not Kafka directly
 
 ### Step 2: Airflow (AFTER Kafka)
 

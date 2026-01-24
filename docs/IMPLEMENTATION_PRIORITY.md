@@ -73,17 +73,45 @@ This means:
 2. Agent needs Kafka tool to query streaming data
 3. Course provides docker-compose template
 
+**Architecture (from course):**
+```
+Producer (fake alerts) → Kafka Topic → Consumer → PostgreSQL (local)
+                                                        ↓
+                                                 Agent queries here
+```
+
+**Key insight:** Streaming pipeline is SEPARATE from batch (Snowflake). Uses local PostgreSQL as sink.
+
 **What to Build:**
 
 ```
 kafka/
-├── docker-compose.yml      # KRaft mode (no ZooKeeper)
-├── producer.py             # Generates fake app metrics
-├── consumer.py             # Reads and prints metrics
-└── .env                    # Kafka config
+├── docker-compose.yml      # Kafka + PostgreSQL containers
+├── producer.py             # Generates fake alerts
+├── consumer.py             # Writes alerts to PostgreSQL
+├── test_setup.py           # Verify connections
+└── .env                    # Config
 ```
 
-**Implementation Pattern (from course):**
+**Data: Real-time Alerts (unrelated to batch analytics)**
+
+| Field | Type | Example |
+|-------|------|---------|
+| `id` | UUID | auto-generated |
+| `timestamp` | datetime | 2026-01-24T10:30:00 |
+| `alert_type` | string | SPEND_SPIKE, ROAS_DROP, INSTALL_SURGE, ERROR_RATE |
+| `severity` | string | info, warning, critical |
+| `message` | string | "Unusual spend pattern in TH region" |
+| `value` | float | 1250.00 |
+| `created_at` | datetime | auto |
+
+**Why alerts (not app metrics):**
+- Different from batch data (no duplication of Snowflake data)
+- Simple to generate with random values
+- Makes business sense ("Show me recent alerts")
+- Easy to demo
+
+**Implementation:**
 
 ```yaml
 # kafka/docker-compose.yml
@@ -111,28 +139,58 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+
+  postgres:
+    image: postgres:15
+    container_name: capstone-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: capstone
+      POSTGRES_PASSWORD: capstone123
+      POSTGRES_DB: streaming
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U capstone -d streaming
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
 ```
 
 ```python
 # kafka/producer.py
-"""Fake app metrics producer for demo."""
+"""Fake alerts producer for demo - UNRELATED to batch data."""
 import json
 import time
 import random
+import uuid
 from datetime import datetime
 from kafka import KafkaProducer
 
-APPS = ["Video AI Generator", "Photo Editor Pro", "Music Player"]
-COUNTRIES = ["US", "TH", "VN", "JP"]
+ALERT_TYPES = ["SPEND_SPIKE", "ROAS_DROP", "INSTALL_SURGE", "ERROR_RATE"]
+SEVERITIES = ["info", "warning", "critical"]
+MESSAGES = {
+    "SPEND_SPIKE": "Unusual spend pattern detected in {} region",
+    "ROAS_DROP": "ROAS dropped below threshold for {}",
+    "INSTALL_SURGE": "Install volume spike in {}",
+    "ERROR_RATE": "Error rate increased for {} platform",
+}
+REGIONS = ["US", "TH", "VN", "JP", "ID"]
 
-def generate_metric():
+def generate_alert():
+    alert_type = random.choice(ALERT_TYPES)
+    region = random.choice(REGIONS)
     return {
+        "id": str(uuid.uuid4()),
         "timestamp": datetime.now().isoformat(),
-        "app_name": random.choice(APPS),
-        "country": random.choice(COUNTRIES),
-        "revenue": round(random.uniform(10, 500), 2),
-        "installs": random.randint(10, 200),
-        "cost": round(random.uniform(5, 300), 2),
+        "alert_type": alert_type,
+        "severity": random.choice(SEVERITIES),
+        "message": MESSAGES[alert_type].format(region),
+        "value": round(random.uniform(100, 5000), 2),
     }
 
 def main():
@@ -141,12 +199,72 @@ def main():
         value_serializer=lambda v: json.dumps(v).encode('utf-8')
     )
 
-    print("Starting Kafka producer...")
+    print("Starting alert producer...")
     while True:
-        metric = generate_metric()
-        producer.send('app_metrics', metric)
-        print(f"Sent: {metric}")
-        time.sleep(5)
+        alert = generate_alert()
+        producer.send('alerts', alert)
+        print(f"Sent: {alert['severity'].upper()} - {alert['message']}")
+        time.sleep(10)  # Every 10 seconds
+
+if __name__ == "__main__":
+    main()
+```
+
+```python
+# kafka/consumer.py
+"""Alert consumer - writes to PostgreSQL."""
+import json
+import psycopg2
+from kafka import KafkaConsumer
+
+def get_db_connection():
+    return psycopg2.connect(
+        host="localhost",
+        port=5432,
+        database="streaming",
+        user="capstone",
+        password="capstone123"
+    )
+
+def create_table(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS alerts (
+                id UUID PRIMARY KEY,
+                timestamp TIMESTAMP,
+                alert_type VARCHAR(50),
+                severity VARCHAR(20),
+                message TEXT,
+                value DECIMAL(10,2),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        conn.commit()
+
+def main():
+    conn = get_db_connection()
+    create_table(conn)
+
+    consumer = KafkaConsumer(
+        'alerts',
+        bootstrap_servers='localhost:29092',
+        value_deserializer=lambda x: json.loads(x.decode('utf-8')),
+        auto_offset_reset='earliest',
+        group_id='alert-consumer'
+    )
+
+    print("Consuming alerts...")
+    for message in consumer:
+        alert = message.value
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO alerts (id, timestamp, alert_type, severity, message, value)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO NOTHING
+            """, (alert['id'], alert['timestamp'], alert['alert_type'],
+                  alert['severity'], alert['message'], alert['value']))
+            conn.commit()
+        print(f"Stored: {alert['severity']} - {alert['message']}")
 
 if __name__ == "__main__":
     main()
@@ -154,21 +272,27 @@ if __name__ == "__main__":
 
 **Demo Script:**
 ```bash
-# Terminal 1: Start Kafka
+# Terminal 1: Start Kafka + PostgreSQL
 cd kafka && docker-compose up -d
 
-# Terminal 2: Start producer
+# Wait for healthy (check status)
+docker-compose ps
+
+# Terminal 2: Start consumer (writes to PostgreSQL)
+uv run python kafka/consumer.py
+
+# Terminal 3: Start producer (generates alerts)
 uv run python kafka/producer.py
 
-# Terminal 3: Start consumer (or show in agent)
-uv run python kafka/consumer.py
+# Verify in PostgreSQL
+docker exec -it capstone-postgres psql -U capstone -d streaming -c "SELECT * FROM alerts ORDER BY created_at DESC LIMIT 5;"
 ```
 
 **Acceptance Criteria:**
-- [ ] Kafka starts without errors
-- [ ] Producer sends messages every 5 seconds
-- [ ] Consumer receives and prints messages
-- [ ] Data is visible within 5 minutes (< 5 min latency requirement)
+- [ ] Kafka + PostgreSQL start without errors
+- [ ] Producer sends alerts every 10 seconds
+- [ ] Consumer writes alerts to PostgreSQL
+- [ ] Agent can query alerts from PostgreSQL
 
 ---
 
@@ -453,7 +577,7 @@ def search_documents(
 **Complexity:** LOW
 
 **Why After Kafka Setup:**
-1. Depends on Kafka being running
+1. Depends on PostgreSQL being populated by consumer
 2. Shows agent can query real-time data
 3. Quick implementation
 
@@ -461,101 +585,90 @@ def search_documents(
 
 ```python
 # agent/tools/kafka_tools.py
-"""Kafka tool for querying streaming metrics."""
-import json
+"""Streaming alerts tool - queries PostgreSQL sink."""
+import psycopg2
 from typing import Annotated
-from datetime import datetime, timedelta
-
 from langchain_core.tools import tool
-from kafka import KafkaConsumer
 
-# Cache for recent messages
-_recent_messages = []
-_last_fetch = None
-
-def fetch_recent_messages(max_messages: int = 10):
-    """Fetch recent messages from Kafka topic."""
-    global _recent_messages, _last_fetch
-
-    # Cache for 30 seconds
-    if _last_fetch and (datetime.now() - _last_fetch) < timedelta(seconds=30):
-        return _recent_messages
-
-    try:
-        consumer = KafkaConsumer(
-            'app_metrics',
-            bootstrap_servers='localhost:29092',
-            auto_offset_reset='latest',
-            enable_auto_commit=False,
-            value_deserializer=lambda x: json.loads(x.decode('utf-8')),
-            consumer_timeout_ms=5000  # 5 second timeout
-        )
-
-        messages = []
-        for message in consumer:
-            messages.append(message.value)
-            if len(messages) >= max_messages:
-                break
-
-        consumer.close()
-        _recent_messages = messages
-        _last_fetch = datetime.now()
-        return messages
-
-    except Exception as e:
-        return []
+def get_db_connection():
+    """Connect to streaming PostgreSQL database."""
+    return psycopg2.connect(
+        host="localhost",
+        port=5432,
+        database="streaming",
+        user="capstone",
+        password="capstone123"
+    )
 
 @tool
-def query_realtime_metrics(
-    metric_type: Annotated[str, "Type of metric: 'revenue', 'installs', 'cost', or 'all'"] = "all"
+def query_realtime_alerts(
+    severity: Annotated[str, "Filter by severity: 'all', 'critical', 'warning', or 'info'"] = "all",
+    limit: Annotated[int, "Number of alerts to return"] = 10
 ) -> str:
     """
-    Query real-time app metrics from the streaming pipeline.
+    Query real-time alerts from the streaming pipeline.
 
     Use this tool when asked about:
-    - Latest metrics (last few minutes)
-    - Real-time data
-    - Current streaming values
+    - Recent alerts or notifications
+    - Real-time monitoring events
+    - Critical/warning alerts
+    - Streaming data status
+
+    The streaming pipeline is SEPARATE from batch analytics.
+    It shows alerts like SPEND_SPIKE, ROAS_DROP, INSTALL_SURGE, ERROR_RATE.
 
     Args:
-        metric_type: Filter by metric type or 'all' for everything
+        severity: Filter by alert severity ('all', 'critical', 'warning', 'info')
+        limit: Maximum number of alerts to return
 
     Returns:
-        Recent metrics from the streaming pipeline
+        Recent alerts from the streaming pipeline
     """
-    messages = fetch_recent_messages()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-    if not messages:
-        return "No recent streaming data available. The Kafka producer may not be running."
+        if severity == "all":
+            cur.execute("""
+                SELECT timestamp, alert_type, severity, message, value
+                FROM alerts
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (limit,))
+        else:
+            cur.execute("""
+                SELECT timestamp, alert_type, severity, message, value
+                FROM alerts
+                WHERE severity = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (severity, limit))
 
-    # Format output
-    output = f"**Real-time Metrics** (last {len(messages)} events):\n\n"
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
 
-    total_revenue = 0
-    total_installs = 0
-    total_cost = 0
+        if not rows:
+            return f"No {severity} alerts found. The streaming pipeline may not be running."
 
-    for msg in messages:
-        total_revenue += msg.get('revenue', 0)
-        total_installs += msg.get('installs', 0)
-        total_cost += msg.get('cost', 0)
+        output = f"**Real-time Alerts** (last {len(rows)}):\n\n"
+        for row in rows:
+            ts, alert_type, sev, msg, val = row
+            icon = {"critical": "🔴", "warning": "🟡", "info": "🔵"}.get(sev, "⚪")
+            output += f"{icon} **{sev.upper()}** [{alert_type}]\n"
+            output += f"   {msg} (value: {val})\n"
+            output += f"   _{ts}_\n\n"
 
-        if metric_type == "all":
-            output += f"- {msg['timestamp']}: {msg['app_name']} ({msg['country']})\n"
-            output += f"  Revenue: ${msg['revenue']:.2f}, Installs: {msg['installs']}, Cost: ${msg['cost']:.2f}\n"
+        return output
 
-    output += f"\n**Summary:**\n"
-    output += f"- Total Revenue: ${total_revenue:.2f}\n"
-    output += f"- Total Installs: {total_installs}\n"
-    output += f"- Total Cost: ${total_cost:.2f}\n"
-
-    return output
+    except Exception as e:
+        return f"Error querying alerts: {str(e)}. Is the streaming pipeline running?"
 ```
 
 **Acceptance Criteria:**
-- [ ] Tool connects to Kafka
-- [ ] Returns recent messages
-- [ ] Agent can call the tool
+- [ ] Tool connects to PostgreSQL
+- [ ] Returns recent alerts with severity filter
+- [ ] Agent can call the tool and display results
 
 ---
 

@@ -15,3 +15,4 @@ SELECT
     DAYOFWEEK(date) AS day_of_week,
     DAYNAME(date) AS day_name
 FROM date_spine
+-- demo run Sat Jan 24 11:04:00 +07 2026

@@ -1,274 +1,400 @@
-# Demo Checklist
+# Demo Checklist - 30 Minutes
 
-Step-by-step commands with verification for demo day.
+Step-by-step commands with verification. Each step has EXECUTE and VERIFY.
+
+**Demo Date:** 2026-01-24
+**Time Budget:** 30 minutes total
 
 ---
 
-## Pre-Demo Setup (10 min before)
+## Pre-Demo Setup (10 min before demo)
 
-### 1. Start Services
+### 1. Open Required Windows
 
+```
+Window 1: Terminal (for commands)
+Window 2: Snowflake UI (logged in, DB_T34.ANALYTICS)
+Window 3: Browser - GitHub Actions page
+Window 4: Browser - Airflow UI (will open later)
+```
+
+### 2. Start Docker Services
+
+**EXECUTE:**
 ```bash
-# Terminal 1: Start Kafka + PostgreSQL
-cd kafka && docker-compose up -d
-
-# Terminal 2: Start Airflow
-cd airflow && docker-compose up -d
-
-# Verify containers running
-docker ps --format "table {{.Names}}\t{{.Status}}"
+cd ~/code_personal/fa-c002-lab
+cd kafka && docker-compose up -d && cd ..
+cd airflow && docker-compose up -d && cd ..
 ```
 
-**Expected Output:**
-```
-NAMES                    STATUS
-capstone-kafka           Up
-capstone-streaming-db    Up
-airflow-webserver        Up
-airflow-scheduler        Up
-airflow-postgres         Up
-```
-
-### 2. Generate Alerts Data
-
+**VERIFY:**
 ```bash
-# Generate 30 alerts (batch mode, instant)
-uv run python kafka/producer.py --batch 30 --interval 0
+docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "capstone|airflow"
 ```
 
-**Expected:** "Produced 30 alerts"
+**Expected:** 5 containers running (kafka, streaming-db, webserver, scheduler, postgres)
 
-### 3. Verify PostgreSQL Has Data
+### 3. Generate Initial Alerts
 
+**EXECUTE:**
 ```bash
-# Check alerts in PostgreSQL
+uv run python kafka/producer.py --batch 20 --interval 0
+```
+
+**VERIFY:**
+```bash
 docker exec capstone-streaming-db psql -U postgres -d streaming -c "SELECT COUNT(*) FROM alerts;"
 ```
 
-**Expected:** count = 30+
+**Expected:** count >= 20
 
 ---
 
-## Demo Flow
+## Phase 1: Real-time Pipeline (5 min)
 
-### Part 1: CI/CD (2 min)
+### Step 1.1: Start CI/CD (1 min)
 
-**Show:**
-1. Open GitHub Actions: https://github.com/ThaiLe1220/fa-c002-lab-eu/actions
-2. Show latest green run
-3. Click to show: SQLFluff lint + dbt test (26 tests pass)
+**SAY:** "Let me trigger the CI/CD pipeline first, it will run in background"
 
-**Talking Point:**
-> "Every push triggers SQLFluff linting and dbt tests. 26 tests run against Snowflake."
-
----
-
-### Part 2: Snowflake Data Verification (3 min)
-
-**Verify fresh data exists:**
-
-```sql
--- In Snowflake UI (DB_T34.ANALYTICS)
-
--- Check latest date
-SELECT MAX(date) as latest_date FROM fct_app_daily_performance;
--- Expected: 2026-01-23 (yesterday)
-
--- Check row counts
-SELECT
-    (SELECT COUNT(*) FROM fct_app_daily_performance) as fact_rows,
-    (SELECT COUNT(*) FROM dim_apps) as apps,
-    (SELECT COUNT(*) FROM dim_dates) as dates;
--- Expected: ~16K fact rows, 59 apps, 29 dates
-
--- Proof: Show specific row with ID + timestamp
-SELECT
-    date,
-    app_store_id,
-    total_revenue,
-    network_cost,
-    d0_roas_pct,
-    _loaded_at
-FROM fct_app_daily_performance
-WHERE date = '2026-01-23'
-ORDER BY total_revenue DESC
-LIMIT 3;
-```
-
-**Talking Point:**
-> "Data is fresh - loaded yesterday. We can see revenue, cost, and D0 ROAS for each app."
-
----
-
-### Part 3: dbt Lineage (2 min)
-
-**Show in Snowflake or dbt docs:**
-
-```
-Raw Sources (RAW_CAPSTONE)
-    ├── admob_daily
-    └── adjust_daily
-         ↓
-Staging (01_staging)
-    ├── stg_admob_capstone
-    └── stg_adjust_capstone
-         ↓
-Intermediate (02_intermediate)
-    └── int_app_daily_metrics
-         ↓
-Mart (03_mart)
-    ├── fct_app_daily_performance
-    ├── dim_apps
-    └── dim_dates
-```
-
-**Command to run dbt (if needed):**
+**EXECUTE:** (In GitHub - push a small change or use workflow dispatch)
 ```bash
-cd my_dbt_project && dbt build --select "stg_admob_capstone stg_adjust_capstone int_app_daily_metrics fct_app_daily_performance"
+# Option A: Manual trigger in GitHub Actions UI
+# Option B: Small commit
+echo "# Demo $(date)" >> DEMO_RUN.md && git add DEMO_RUN.md && git commit -m "demo: trigger CI" && git push && rm DEMO_RUN.md
 ```
+
+**VERIFY:**
+```bash
+gh run list --limit 1
+```
+
+**Expected:** Shows "in_progress" status
+
+**SAY:** "CI is running SQLFluff lint and dbt tests. Let's continue while it runs."
 
 ---
 
-### Part 4: Kafka Streaming (3 min)
+### Step 1.2: Kafka Data Flow Demo (3 min)
 
-**Show producer generating alerts:**
+**SAY:** "Now I'll show real-time data flow with Kafka"
 
+#### Show Producer
+
+**EXECUTE:**
 ```bash
-# Generate 5 alerts with 2-second interval (visible)
 uv run python kafka/producer.py --batch 5 --interval 2
 ```
 
-**Verify in PostgreSQL:**
+**Expected output:** Shows 5 alerts being produced with 2-second intervals
 
+#### Verify in PostgreSQL
+
+**VERIFY:**
 ```bash
-# Show latest alerts
 docker exec capstone-streaming-db psql -U postgres -d streaming -c \
   "SELECT id, alert_type, severity, app_id, created_at FROM alerts ORDER BY created_at DESC LIMIT 5;"
 ```
 
-**Expected Output:**
-```
- id |   alert_type   | severity |         app_id          |       created_at
-----+----------------+----------+-------------------------+------------------------
- 45 | ROAS_DROP      | critical | com.example.app1        | 2026-01-24 10:30:15
- 44 | BUDGET_EXCEED  | warning  | com.example.app2        | 2026-01-24 10:30:13
-```
+**Expected:** Shows 5 recent alerts with timestamps from just now
 
-**Talking Point:**
-> "Kafka produces alerts in real-time. Consumer writes to PostgreSQL. Agent can query this."
+**SAY:** "Producer sends alerts to Kafka topic, consumer writes to PostgreSQL. These timestamps prove the data just landed."
 
 ---
 
-### Part 5: Airflow (3 min)
+### Step 1.3: CI/CD Results (1 min)
 
-**Open Airflow UI:**
+**SAY:** "Let's check if CI completed"
+
+**VERIFY:**
+```bash
+gh run list --limit 1
+gh run view --log 2>&1 | grep -E "(PASS|ERROR|success|fail)" | tail -10
 ```
-http://localhost:8080
-Username: admin
-Password: admin
-```
 
-**Show:**
-1. DAG: `dbt_pipeline`
-2. Graph view: debug -> run -> test
-3. Trigger run manually (or show recent successful run)
+**Expected:** Shows "success" and "26 data tests PASS"
 
-**Talking Point:**
-> "Airflow orchestrates dbt: debug checks connection, run builds models, test validates data."
+**SAY:** "CI runs SQLFluff for code quality and dbt test for data quality. All 26 tests passed."
 
 ---
 
-### Part 6: AI Agent (10 min)
+## Phase 2: Batch Pipeline (5 min)
 
-**Start Streamlit UI:**
+### Step 2.1: Show Current Data State (1 min)
+
+**SAY:** "First, let me show the current data in Snowflake"
+
+**VERIFY (in Snowflake UI):**
+```sql
+-- Current state before collection
+SELECT
+    MAX(date) as latest_date,
+    COUNT(*) as total_rows,
+    MAX(loaded_at) as last_loaded
+FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY;
+```
+
+**Write down:** latest_date = _____, total_rows = _____
+
+---
+
+### Step 2.2: Run Batch Collection (2 min)
+
+**SAY:** "Now I'll collect yesterday's fresh data from AdMob and Adjust APIs"
+
+**EXECUTE:**
+```bash
+# Collect yesterday only (--days 1)
+uv run python scripts/collect_admob_capstone.py --days 1
+```
+
+**Expected output:**
+```
+Deleting existing data for 2026-01-23 to 2026-01-23...
+  Deleted X existing rows
+Loading Y rows to RAW_CAPSTONE.ADMOB_DAILY...
+✓ Loaded Y rows to Snowflake
+```
+
+**EXECUTE:**
+```bash
+uv run python scripts/collect_adjust_capstone.py --days 1
+```
+
+**VERIFY (in Snowflake UI):**
+```sql
+-- Proof: New data with fresh timestamp
+SELECT
+    raw_record_id,
+    date,
+    app_store_id,
+    loaded_at
+FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY
+WHERE loaded_at > DATEADD(minute, -5, CURRENT_TIMESTAMP())
+ORDER BY loaded_at DESC
+LIMIT 5;
+```
+
+**SAY:** "See the loaded_at timestamp? This data was just collected from the API. The delete-insert pattern ensures idempotency."
+
+---
+
+### Step 2.3: Run dbt via Airflow (2 min)
+
+**SAY:** "Now Airflow will orchestrate dbt transformation"
+
+**EXECUTE:** Open http://localhost:8080 (admin/admin)
+
+1. Find DAG: `dbt_pipeline`
+2. Click "Trigger DAG"
+3. Watch tasks: debug → run → test
+
+**VERIFY (in Snowflake UI while waiting):**
+```sql
+-- Show dbt model structure
+SELECT
+    table_schema,
+    table_name,
+    row_count,
+    last_altered
+FROM DB_T34.information_schema.tables
+WHERE table_schema = 'ANALYTICS'
+ORDER BY table_name;
+```
+
+**SAY:** "dbt transforms raw data through staging → intermediate → mart layers"
+
+**VERIFY (after Airflow completes):**
+```sql
+-- Fresh data in fact table
+SELECT
+    date,
+    app_store_id,
+    ad_revenue,
+    network_cost,
+    CASE WHEN network_cost > 0
+         THEN ROUND(ad_revenue_d0 / network_cost * 100, 2)
+         ELSE 0 END as d0_roas_pct,
+    dbt_updated_at
+FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE
+WHERE date = CURRENT_DATE() - 1
+ORDER BY ad_revenue DESC
+LIMIT 5;
+```
+
+**SAY:** "Fact table now has yesterday's data with calculated metrics like D0 ROAS"
+
+---
+
+## Phase 3: AI Agent & RAG (10 min)
+
+### Step 3.1: Show RAG Document (2 min)
+
+**SAY:** "The agent uses RAG to answer questions about business rules"
+
+**EXECUTE:**
+```bash
+cat docs/business_rules/ameno_business_rules.md | head -50
+```
+
+**SAY:** "This document contains our business rules - ROAS thresholds, CPI benchmarks, etc."
+
+**EXECUTE (optional - show chunking):**
+```bash
+uv run python agent/rag_demo.py
+# Select option 2 (Show Chunking)
+```
+
+**SAY:** "RAG chunks the document into ~500 char pieces, embeds them as vectors, and searches by similarity"
+
+---
+
+### Step 3.2: Start Agent (1 min)
+
+**EXECUTE:**
 ```bash
 uv run streamlit run agent/app.py
 ```
 
-**Demo Queries (test all 3 tools):**
-
-| Question | Expected Tool | Verification |
-|----------|---------------|--------------|
-| "What's our total revenue?" | query_snowflake | Shows sum from Snowflake |
-| "Show me critical alerts" | query_realtime_alerts | Shows alerts from PostgreSQL |
-| "What's the ROAS threshold?" | search_business_documents | Shows business rules from RAG |
-| "Which apps are losing money?" | Multiple tools | Combines data + rules |
-
-**CLI Alternative:**
-```bash
-# Single queries
-uv run python -m agent.agent -q "What's our total revenue?"
-uv run python -m agent.agent -q "Show me critical alerts"
-uv run python -m agent.agent -q "What are ROAS thresholds?"
-
-# Interactive mode
-uv run python -m agent.agent --interactive
-```
+**Opens:** http://localhost:8501
 
 ---
 
-### Part 7: RAG Explanation (5 min if asked)
+### Step 3.3: Demo Query - Batch Data (2 min)
 
-**Run RAG demo:**
-```bash
-uv run python agent/rag_demo.py
+**SAY:** "Let me ask about revenue from Snowflake"
+
+**ASK AGENT:**
+```
+What's our total revenue yesterday?
 ```
 
-**Shows 5 steps:**
-1. Load document
-2. Chunk into pieces (~500 chars)
-3. Embed with OpenAI (1536 dimensions)
-4. Search with cosine similarity
-5. Full pipeline demo
-
-**Talking Point:**
-> "RAG converts text to vectors. Similar questions find similar document chunks."
-
----
-
-## Incremental Data Proof (if asked)
-
-**Before incremental:**
+**VERIFY (in Snowflake UI):**
 ```sql
-SELECT COUNT(*) as before_count, MAX(date) as max_date
-FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY;
+SELECT SUM(ad_revenue) as total_revenue
+FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE
+WHERE date = CURRENT_DATE() - 1;
 ```
 
-**Run collection:**
-```bash
-python scripts/collect_admob_capstone.py --days 1
-```
-
-**After incremental:**
-```sql
-SELECT COUNT(*) as after_count, MAX(date) as max_date
-FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY;
-
--- Show new rows
-SELECT * FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY
-WHERE _loaded_at > DATEADD(minute, -5, CURRENT_TIMESTAMP())
-ORDER BY _loaded_at DESC LIMIT 5;
-```
+**SAY:** "Agent queried Snowflake and returned the same number"
 
 ---
 
-## Emergency Recovery
+### Step 3.4: Demo Query - Streaming Data (2 min)
+
+**SAY:** "Now let me check real-time alerts from Kafka pipeline"
+
+**ASK AGENT:**
+```
+Show me critical alerts
+```
+
+**VERIFY:**
+```bash
+docker exec capstone-streaming-db psql -U postgres -d streaming -c \
+  "SELECT alert_type, severity, app_id, created_at FROM alerts WHERE severity='critical' ORDER BY created_at DESC LIMIT 5;"
+```
+
+**SAY:** "Agent queried PostgreSQL where Kafka consumer writes alerts"
+
+---
+
+### Step 3.5: Demo Query - RAG (2 min)
+
+**SAY:** "Now a question about business rules from the document"
+
+**ASK AGENT:**
+```
+What's the ROAS threshold for pausing campaigns?
+```
+
+**VERIFY:**
+```bash
+grep -i "roas" docs/business_rules/ameno_business_rules.md | head -5
+```
+
+**SAY:** "Agent searched the vector store and found the relevant chunk from our business rules document"
+
+---
+
+### Step 3.6: Demo Query - Combined (1 min)
+
+**SAY:** "Finally, a complex query combining all sources"
+
+**ASK AGENT:**
+```
+Which apps are losing money based on our business rules?
+```
+
+**SAY:** "Agent used Snowflake for metrics, RAG for thresholds, and combined them to identify underperforming apps"
+
+---
+
+## Phase 4: Extra Features & Q&A (10 min)
+
+### Step 4.1: Show Incremental Strategy (2 min)
+
+**SAY:** "Our dbt models use incremental materialization"
+
+**EXECUTE:**
+```bash
+grep -A5 "is_incremental" my_dbt_project/models/02_intermediate/int_app_daily_metrics.sql
+```
+
+**Shows:**
+```sql
+{% if is_incremental() %}
+WHERE date > (SELECT MAX(date) FROM {{ this }})
+{% endif %}
+```
+
+**SAY:** "Only new dates are processed, not the full table rebuild"
+
+---
+
+### Step 4.2: Show dbt Tests (2 min)
+
+**SAY:** "We have 26 data quality tests"
+
+**EXECUTE:**
+```bash
+cd my_dbt_project && dbt test --select "stg_admob_capstone" 2>&1 | tail -20
+```
+
+**SAY:** "Tests check not_null, unique constraints on key columns"
+
+---
+
+### Step 4.3: Q&A Preparation (1 min)
+
+**Common questions and answers:**
+
+| Question | Answer |
+|----------|--------|
+| "Why FAISS not Pinecone?" | Free, local, no API needed. Works for small docs. |
+| "Why delete-insert?" | Idempotent. Can re-run safely. |
+| "Why D0 ROAS?" | 70-80% of lifetime revenue comes on install day |
+| "What if API fails?" | CSV backup saved locally before Snowflake load |
+
+---
+
+## Emergency Recovery Commands
 
 ### If table dropped:
 ```sql
--- Undrop table (Snowflake Time Travel)
 UNDROP TABLE DB_T34.RAW_CAPSTONE.ADMOB_DAILY;
-
--- Or restore from time travel
-CREATE TABLE DB_T34.RAW_CAPSTONE.ADMOB_DAILY CLONE DB_T34.RAW_CAPSTONE.ADMOB_DAILY
-  AT(OFFSET => -300);  -- 5 minutes ago
 ```
 
-### If Kafka/Airflow down:
+### If data looks wrong:
+```sql
+-- Restore from 5 minutes ago
+CREATE OR REPLACE TABLE DB_T34.RAW_CAPSTONE.ADMOB_DAILY
+  CLONE DB_T34.RAW_CAPSTONE.ADMOB_DAILY AT(OFFSET => -300);
+```
+
+### If Docker down:
 ```bash
-# Restart services
-cd kafka && docker-compose down && docker-compose up -d
-cd airflow && docker-compose down && docker-compose up -d
+cd kafka && docker-compose down && docker-compose up -d && cd ..
+cd airflow && docker-compose down && docker-compose up -d && cd ..
 ```
 
 ### If agent fails:
@@ -276,27 +402,45 @@ cd airflow && docker-compose down && docker-compose up -d
 # Check API key
 cat .env | grep OPENAI
 
-# Check Snowflake connection
+# Test Snowflake connection
 uv run python -c "from scripts.utils.snowflake_client import get_snowflake_client; c = get_snowflake_client(); c.connect(); print('OK')"
 ```
 
 ---
 
-## Quick Reference Commands
+## Quick Command Reference
 
 ```bash
-# Start everything
+# === PRE-DEMO ===
 cd kafka && docker-compose up -d && cd ../airflow && docker-compose up -d && cd ..
+uv run python kafka/producer.py --batch 20 --interval 0
 
-# Generate alerts
-uv run python kafka/producer.py --batch 30 --interval 0
+# === PHASE 1: STREAMING ===
+uv run python kafka/producer.py --batch 5 --interval 2
+docker exec capstone-streaming-db psql -U postgres -d streaming -c "SELECT * FROM alerts ORDER BY created_at DESC LIMIT 5;"
 
-# Run agent
+# === PHASE 2: BATCH ===
+uv run python scripts/collect_admob_capstone.py --days 1
+uv run python scripts/collect_adjust_capstone.py --days 1
+# Airflow: http://localhost:8080 → Trigger dbt_pipeline
+
+# === PHASE 3: AGENT ===
 uv run streamlit run agent/app.py
+# Questions: "total revenue?", "critical alerts?", "ROAS threshold?"
 
-# Run dbt
-cd my_dbt_project && dbt build
-
-# Check CI
-gh run list --limit 3
+# === VERIFY ===
+gh run list --limit 1
+docker ps | grep -E "capstone|airflow"
 ```
+
+---
+
+## Timing Checklist
+
+| Phase | Time | Checkpoint |
+|-------|------|------------|
+| Pre-demo | -10 min | Docker running, alerts generated |
+| Phase 1 | 0-5 min | CI triggered, Kafka demo done |
+| Phase 2 | 5-10 min | Collection done, Airflow triggered |
+| Phase 3 | 10-20 min | All 3 agent queries demoed |
+| Phase 4 | 20-30 min | Q&A, wrap up |

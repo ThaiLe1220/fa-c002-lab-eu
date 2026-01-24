@@ -137,6 +137,37 @@ uv run python -m agent.agent -q "What is 2+2?" 2>/dev/null | tail -5
 
 ---
 
+## RESET AFTER TESTING (Run before actual demo)
+
+If you tested the flow already, reset to clean state:
+
+```bash
+# Delete Jan 23 from RAW tables
+uv run python -c "
+from scripts.utils.snowflake_client import get_snowflake_client
+client = get_snowflake_client(schema='RAW_CAPSTONE')
+conn = client.connect()
+cursor = conn.cursor()
+cursor.execute(\"DELETE FROM ADMOB_DAILY WHERE DATE = '20260123'\")
+print(f'Deleted {cursor.rowcount} from ADMOB_DAILY')
+cursor.execute(\"DELETE FROM ADJUST_DAILY WHERE DAY = '2026-01-23'\")
+print(f'Deleted {cursor.rowcount} from ADJUST_DAILY')
+client.close()
+"
+
+# Rebuild ANALYTICS (back to Jan 22 state)
+cd my_dbt_project && dbt build --full-refresh && cd ..
+```
+
+**VERIFY:**
+```sql
+-- In Snowflake: should show Jan 22 as latest
+SELECT MAX(DATE) FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY;
+SELECT MAX(DATE) FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE;
+```
+
+---
+
 ## Pre-Demo Checklist
 
 Before starting demo, confirm:

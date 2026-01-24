@@ -14,11 +14,11 @@
 | Phase 2.5 (Data Backfill) | DONE | - |
 | Phase 4 (AI Agent Core) | DONE | 10 |
 | Phase 3 (Kafka) | DONE | 7.5 |
-| Phase 3 (Airflow) | **TO DO** | 7.5 |
+| Phase 3 (Airflow) | DONE | 7.5 |
 | Phase 4 (RAG Tool) | **TO DO** | 10 |
 | Extra Features | **TO DO** | 20-40 |
 
-**Current Score:** ~62.5 pts | **Target:** 85+ pts
+**Current Score:** ~70 pts | **Target:** 85+ pts
 
 ---
 
@@ -29,7 +29,7 @@
 | # | Task | Time | Points | Status |
 |---|------|------|--------|--------|
 | 1 | Kafka Setup | 45 min | 7.5 | [x] DONE |
-| 2 | Airflow Setup | 45 min | 7.5 | [ ] |
+| 2 | Airflow Setup | 45 min | 7.5 | [x] DONE |
 | 3 | Basic RAG (FAISS) | 60 min | 10 | [ ] |
 | 4 | Kafka Agent Tool | 15 min | 5 | [x] DONE |
 
@@ -106,16 +106,17 @@
 - Stored in PostgreSQL `streaming.alerts` table
 - Agent queries PostgreSQL via `query_realtime_alerts` tool
 
-### Step 2: Airflow (NOW)
+### Step 2: Airflow - DONE
 
-```bash
-mkdir -p airflow/dags
-# Create docker-compose.yml
-# Create dags/dbt_pipeline.py (3 tasks)
-# Test: trigger DAG
-```
+**Files Created:**
+- `airflow/docker-compose.yml` - Airflow + PostgreSQL (LocalExecutor)
+- `airflow/Dockerfile` - Custom image with dbt-snowflake
+- `airflow/dags/dbt_pipeline.py` - dbt orchestration DAG
+- `airflow/profiles.yml` - dbt profile for Docker
 
-### Step 3: RAG (AFTER Airflow)
+**DAG Tasks:** dbt_debug → dbt_run → dbt_test
+
+### Step 3: RAG (NOW)
 
 ```bash
 # Create agent/tools/rag_tools.py (FAISS)

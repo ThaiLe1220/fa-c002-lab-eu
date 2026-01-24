@@ -2,6 +2,13 @@
 
 Data flow, transformations, and reasoning.
 
+**Verified 2026-01-24:**
+| Table | Schema | Rows | Latest Date |
+|-------|--------|------|-------------|
+| ADMOB_DAILY | RAW_CAPSTONE | 113,412 | 2026-01-23 |
+| ADJUST_DAILY | RAW_CAPSTONE | 127,246 | 2026-01-23 |
+| FCT_APP_DAILY_PERFORMANCE | ANALYTICS | 145,500 | 2026-01-23 |
+
 ---
 
 ## Data Sources
@@ -227,50 +234,107 @@ FROM date_spine
 
 ## Incremental Proof Commands
 
+**Note:** Fact table uses surrogate keys (DATE_KEY, APP_KEY). Join with dimensions for readable values.
+
 **Before run:**
 ```sql
-SELECT COUNT(*) as before_count, MAX(date) as max_date
-FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE;
+-- Check current state
+SELECT COUNT(*) as row_count, MAX(d.DATE) as max_date
+FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE f
+JOIN DB_T34.ANALYTICS.DIM_DATES d ON f.DATE_KEY = d.DATE_KEY;
 ```
 
 **Run collection + dbt:**
 ```bash
-python scripts/collect_admob_capstone.py --days 1
-python scripts/collect_adjust_capstone.py --days 1
+uv run python scripts/collect_admob_capstone.py --days 1
+uv run python scripts/collect_adjust_capstone.py --days 1
 cd my_dbt_project && dbt build
 ```
 
 **After run:**
 ```sql
 -- Count change
-SELECT COUNT(*) as after_count, MAX(date) as max_date
-FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE;
+SELECT COUNT(*) as row_count, MAX(d.DATE) as max_date
+FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE f
+JOIN DB_T34.ANALYTICS.DIM_DATES d ON f.DATE_KEY = d.DATE_KEY;
 
 -- Show new rows (by dbt_updated_at)
-SELECT performance_key, date, app_store_id, dbt_updated_at
-FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE
-WHERE dbt_updated_at > DATEADD(minute, -10, CURRENT_TIMESTAMP())
-ORDER BY dbt_updated_at DESC
+SELECT d.DATE, a.APP_NAME, f.AD_REVENUE, f.DBT_UPDATED_AT
+FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE f
+JOIN DB_T34.ANALYTICS.DIM_DATES d ON f.DATE_KEY = d.DATE_KEY
+JOIN DB_T34.ANALYTICS.DIM_APPS a ON f.APP_KEY = a.APP_KEY
+WHERE f.DBT_UPDATED_AT > DATEADD(minute, -10, CURRENT_TIMESTAMP())
+ORDER BY f.DBT_UPDATED_AT DESC
 LIMIT 10;
+
+-- Summary by date (verify incremental)
+SELECT d.DATE, COUNT(*) as rows, SUM(f.AD_REVENUE) as revenue
+FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE f
+JOIN DB_T34.ANALYTICS.DIM_DATES d ON f.DATE_KEY = d.DATE_KEY
+GROUP BY d.DATE
+ORDER BY d.DATE DESC
+LIMIT 5;
 ```
 
 ---
 
-## Tests (26 total)
+## Tests (26 total - Verified)
 
-| Model | Tests |
-|-------|-------|
-| stg_admob_capstone | not_null(raw_record_id), unique(raw_record_id), not_null(date, app_store_id, estimated_earnings) |
-| stg_adjust_capstone | not_null(raw_record_id), unique(raw_record_id), not_null(date, app_store_id) |
-| int_app_daily_metrics | - |
-| fct_app_daily_performance | - |
-| dim_apps | - |
-| dim_dates | - |
+| Model | Tests | Status |
+|-------|-------|--------|
+| stg_admob_capstone | not_null(raw_record_id, date, app_store_id, estimated_earnings), unique(raw_record_id) | 5 PASS |
+| stg_adjust_capstone | not_null(raw_record_id, date, app_store_id), unique(raw_record_id) | 4 PASS |
+| int_app_daily_metrics | not_null(date, app_store_id), unique combination | 4 PASS |
+| fct_app_daily_performance | not_null keys, unique performance_key | 5 PASS |
+| dim_apps | not_null(app_key, app_store_id), unique keys | 4 PASS |
+| dim_dates | not_null(date_key, date), unique keys | 4 PASS |
 
 **Run tests:**
 ```bash
 cd my_dbt_project && dbt test
+# Expected output: Done. PASS=26 WARN=0 ERROR=0 SKIP=0 TOTAL=26
 ```
+
+**Run specific model tests:**
+```bash
+cd my_dbt_project && dbt test --select "stg_admob_capstone"
+# Expected: 5 tests pass
+```
+
+---
+
+## Airflow Orchestration
+
+**DAG:** `capstone_dbt_pipeline`
+**Location:** `airflow/dags/dbt_pipeline.py`
+
+```
+dbt_debug (4s) → dbt_run (24s) → dbt_test (3s)
+```
+
+**Configuration:**
+- Schedule: `None` (manual trigger for demo)
+- Timezone: `Asia/Ho_Chi_Minh`
+- Retries: 2
+- Retry delay: 5 minutes
+
+**Trigger via CLI:**
+```bash
+# Unpause and trigger
+docker exec airflow-webserver airflow dags unpause capstone_dbt_pipeline
+docker exec airflow-webserver airflow dags trigger capstone_dbt_pipeline
+
+# Check status
+docker exec airflow-webserver airflow dags list-runs -d capstone_dbt_pipeline -o table
+```
+
+**Trigger via UI:**
+1. Open http://localhost:8080
+2. Login: admin / admin
+3. Find `capstone_dbt_pipeline`
+4. Click play button → "Trigger DAG"
+
+**Verified run time:** ~31 seconds total (all tasks SUCCESS)
 
 ---
 
@@ -281,23 +345,31 @@ Separate from dbt pipeline. For real-time alerts.
 ```
 kafka/producer.py → Kafka Topic → kafka/consumer.py → PostgreSQL
      │                                                     │
-     └── Alert types: ROAS_DROP, BUDGET_EXCEED, etc       └── alerts table
+     └── Alert types: ROAS_DROP, SPEND_SPIKE, etc         └── alerts table
 ```
 
-**Alert Schema:**
+**Alert Schema (Verified):**
 ```sql
 CREATE TABLE alerts (
-    id SERIAL PRIMARY KEY,
-    alert_type VARCHAR(50),
-    severity VARCHAR(20),   -- critical, warning, info
-    app_id VARCHAR(100),
-    country_code VARCHAR(10),
-    metric_value DECIMAL(18,6),
-    threshold_value DECIMAL(18,6),
-    message TEXT,
-    created_at TIMESTAMP
+    id UUID PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL,
+    alert_type VARCHAR(50) NOT NULL,  -- ROAS_DROP, SPEND_SPIKE, ERROR_RATE, etc.
+    severity VARCHAR(20) NOT NULL,     -- critical, warning, info
+    message TEXT NOT NULL,
+    region VARCHAR(10),                -- VN, US, JP, etc.
+    value NUMERIC(10,2),
+    created_at TIMESTAMP DEFAULT NOW()
 );
+CREATE INDEX idx_alerts_created_at ON alerts(created_at DESC);
+CREATE INDEX idx_alerts_severity ON alerts(severity);
 ```
+
+**Connection Details:**
+- Host: `localhost` (or `capstone-postgres` from Docker)
+- Port: `5433`
+- Database: `streaming`
+- User: `capstone`
+- Password: `capstone123`
 
 **Why PostgreSQL?**
 - Simple, fast for demo

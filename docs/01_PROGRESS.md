@@ -1,6 +1,6 @@
 # Project Progress
 
-**Last Updated:** 2026-01-24
+**Last Updated:** 2026-01-24 (Verified)
 **Demo:** Saturday 2026-01-24
 
 ---
@@ -9,25 +9,25 @@
 
 | Phase | Points | Status |
 |-------|--------|--------|
-| Phase 0-2 (Midterm) | 30 | DONE |
-| Phase 2.5 (Data Backfill) | - | DONE |
-| Phase 3 (Kafka) | 7.5 | DONE |
-| Phase 3 (Airflow) | 7.5 | DONE |
-| Phase 4 (AI Agent) | 10 | DONE |
-| Phase 4 (RAG) | 10 | DONE |
+| Phase 0-2 (Midterm) | 30 | ✅ DONE |
+| Phase 2.5 (Data Backfill) | - | ✅ DONE |
+| Phase 3 (Kafka) | 7.5 | ✅ DONE |
+| Phase 3 (Airflow) | 7.5 | ✅ DONE |
+| Phase 4 (AI Agent) | 10 | ✅ DONE |
+| Phase 4 (RAG) | 10 | ✅ DONE |
 | Extra Features | 10-30 | TODO |
 
 **Current:** ~80 pts | **Target:** 85+
 
 ---
 
-## What Works
+## What Works (Verified 2026-01-24)
 
 ### 1. CI/CD Pipeline
 - **File:** `.github/workflows/dbt_ci.yml`
 - **Trigger:** Push/PR to main/develop (*.sql or my_dbt_project/**)
 - **Steps:** SQLFluff lint + dbt test (26 tests pass)
-- **Last Run:** 2026-01-24 - SUCCESS
+- **Last Run:** 2026-01-24 04:04 - SUCCESS
 
 ### 2. dbt Models (Snowflake)
 - **Location:** `my_dbt_project/models/`
@@ -35,42 +35,53 @@
 
 | Layer | Models | Status |
 |-------|--------|--------|
-| 01_staging | stg_admob_capstone, stg_adjust_capstone | WORKS |
-| 02_intermediate | int_app_daily_metrics | WORKS |
-| 03_mart | fct_app_daily_performance, dim_apps, dim_dates | WORKS |
+| 01_staging | stg_admob_capstone, stg_adjust_capstone | ✅ WORKS |
+| 02_intermediate | int_app_daily_metrics | ✅ WORKS |
+| 03_mart | fct_app_daily_performance, dim_apps, dim_dates | ✅ WORKS |
 
-**Data:** 59 apps, 240 countries, 29 days (Dec 26, 2025 - Jan 23, 2026)
+**Verified Data (2026-01-24):**
+| Table | Rows | Latest Date |
+|-------|------|-------------|
+| RAW_CAPSTONE.ADMOB_DAILY | 113,412 | 2026-01-23 |
+| RAW_CAPSTONE.ADJUST_DAILY | 127,246 | 2026-01-23 |
+| ANALYTICS.FCT_APP_DAILY_PERFORMANCE | 145,500 | 2026-01-23 |
 
 ### 3. Kafka Streaming
 - **Location:** `kafka/`
 - **Components:**
   - `docker-compose.yml` - Kafka (KRaft) + PostgreSQL
   - `producer.py` - Generates alerts (--batch mode)
-  - `consumer.py` - Writes to PostgreSQL
+  - `consumer.py` - Writes to PostgreSQL alerts table
+- **Verified:** Producer → Kafka → Consumer → PostgreSQL working
 
 ### 4. Airflow Orchestration
 - **Location:** `airflow/`
-- **Components:**
-  - `docker-compose.yml` - Airflow (LocalExecutor)
-  - `dags/dbt_pipeline.py` - debug -> run -> test
+- **DAG:** `capstone_dbt_pipeline` (manual trigger)
+- **Tasks:** dbt_debug (4s) → dbt_run (24s) → dbt_test (3s)
+- **Verified:** Full DAG run SUCCESS in ~31 seconds
 
 ### 5. AI Agent (3 Tools)
 - **Location:** `agent/`
 - **Tools:**
 
-| Tool | File | Data Source |
-|------|------|-------------|
-| `query_snowflake` | `tools/snowflake_tools.py` | Snowflake (batch) |
-| `query_realtime_alerts` | `tools/kafka_tools.py` | PostgreSQL (streaming) |
-| `search_business_documents` | `tools/rag_tools.py` | FAISS (RAG) |
+| Tool | Data Source | Verified |
+|------|-------------|----------|
+| `query_snowflake` | Snowflake ANALYTICS | ✅ Returns revenue, metrics |
+| `query_realtime_alerts` | PostgreSQL alerts | ✅ Returns recent alerts |
+| `search_business_documents` | FAISS vector store | ✅ Returns ROAS thresholds |
+
+**Verified queries:**
+- "What's our total revenue?" → $8,761.55 (latest date)
+- "Show me recent alerts" → Returns alerts with severity, region
+- "What is the ROAS threshold?" → Returns 80% threshold from RAG
 
 ---
 
-## What Doesn't Work / Known Issues
+## Known Limitations (Not Issues)
 
-1. **Airflow dbt integration** - Runs but needs manual trigger (no auto-schedule in demo)
-2. **Real-time Kafka** - Uses batch mode for demo (--batch flag)
-3. **Vector store** - Regenerates on first run (cold start ~5s)
+1. **Airflow schedule** - Set to `None` (manual trigger for demo control)
+2. **Kafka producer** - Uses batch mode for demo predictability
+3. **Vector store** - Cold start ~5s on first query (normal behavior)
 
 ---
 

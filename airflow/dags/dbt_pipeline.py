@@ -19,6 +19,7 @@ DBT_PROFILES_DIR = "/opt/airflow/.dbt"
 
 # Environment variables for Snowflake connection
 DBT_ENV = {
+    "PATH": "/home/airflow/.local/bin:" + os.environ.get("PATH", ""),
     "DBT_PROFILES_DIR": DBT_PROFILES_DIR,
     "SNOWFLAKE_ACCOUNT": os.environ.get("SNOWFLAKE_ACCOUNT", ""),
     "SNOWFLAKE_USER": os.environ.get("SNOWFLAKE_USER", ""),
@@ -36,8 +37,8 @@ default_args = {
 
 with DAG(
     dag_id="capstone_dbt_pipeline",
-    schedule="0 2 * * *",  # Run daily at 2 AM
-    start_date=pendulum.datetime(2024, 1, 1, tz="Asia/Bangkok"),
+    schedule=None,  # Manual trigger only (for demo)
+    start_date=pendulum.datetime(2024, 1, 1, tz="Asia/Ho_Chi_Minh"),
     catchup=False,
     tags=["capstone", "dbt", "snowflake", "transformations"],
     max_active_runs=1,

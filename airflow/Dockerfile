@@ -1,6 +1,10 @@
 # Custom Airflow image with dbt-snowflake
 FROM apache/airflow:2.8.1-python3.11
 
+# Install git as root (required for dbt packages)
+USER root
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
 USER airflow
 
 # Install dbt-snowflake and dependencies

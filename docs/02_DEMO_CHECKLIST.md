@@ -351,8 +351,16 @@ LIMIT 5;
 
 **EXECUTE:** Open http://localhost:8080
 - Login: admin / admin
-- Find DAG: `dbt_pipeline`
+- Find DAG: `capstone_dbt_pipeline`
 - Click play button → "Trigger DAG"
+
+**Or via CLI:**
+```bash
+docker exec airflow-webserver airflow dags unpause capstone_dbt_pipeline
+docker exec airflow-webserver airflow dags trigger capstone_dbt_pipeline
+# Check status:
+docker exec airflow-webserver airflow dags list-runs -d capstone_dbt_pipeline -o table
+```
 
 **While waiting, show (in Snowflake UI):**
 ```sql
@@ -366,14 +374,18 @@ ORDER BY TABLE_NAME;
 
 **After Airflow completes (or while running), show:**
 ```sql
+-- Query with proper dimension join
 SELECT
-    DATE,
-    APP_STORE_ID,
-    AD_REVENUE,
-    NETWORK_COST,
-    ROUND(AD_REVENUE_D0 / NULLIF(NETWORK_COST, 0) * 100, 2) as D0_ROAS_PCT
-FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE
-WHERE DATE = CURRENT_DATE() - 1
+    d.DATE,
+    a.APP_NAME,
+    SUM(f.AD_REVENUE) as AD_REVENUE,
+    SUM(f.NETWORK_COST) as NETWORK_COST,
+    ROUND(SUM(f.AD_REVENUE_D0) / NULLIF(SUM(f.NETWORK_COST), 0) * 100, 2) as D0_ROAS_PCT
+FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE f
+JOIN DB_T34.ANALYTICS.DIM_DATES d ON f.DATE_KEY = d.DATE_KEY
+JOIN DB_T34.ANALYTICS.DIM_APPS a ON f.APP_KEY = a.APP_KEY
+WHERE d.DATE = (SELECT MAX(DATE) FROM DB_T34.ANALYTICS.DIM_DATES)
+GROUP BY d.DATE, a.APP_NAME
 ORDER BY AD_REVENUE DESC
 LIMIT 5;
 ```
@@ -433,8 +445,10 @@ What's our total revenue yesterday?
 
 **VERIFY (in Snowflake):**
 ```sql
-SELECT SUM(AD_REVENUE) FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE
-WHERE DATE = CURRENT_DATE() - 1;
+SELECT SUM(f.AD_REVENUE)
+FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE f
+JOIN DB_T34.ANALYTICS.DIM_DATES d ON f.DATE_KEY = d.DATE_KEY
+WHERE d.DATE = (SELECT MAX(DATE) FROM DB_T34.ANALYTICS.DIM_DATES);
 ```
 
 **SAY:** "Agent queried Snowflake. Numbers match."
@@ -518,6 +532,19 @@ cd my_dbt_project && dbt test --select "stg_admob_capstone" 2>&1 | tail -15 && c
 | Why D0 ROAS? | 70-80% of lifetime revenue on install day. |
 | API fails? | CSV backup in `data/capstone/`. |
 | Table dropped? | `UNDROP TABLE` or Time Travel. |
+
+---
+
+## KNOWN FIXES APPLIED
+
+These fixes have already been applied to the codebase:
+
+1. **Airflow Dockerfile** - Added `git` installation (required for `dbt debug`)
+2. **dbt_pipeline.py** - Added PATH environment variable for dbt binary location
+3. **DAG schedule** - Set to `None` (manual trigger only for demo)
+4. **Timezone** - Set to `Asia/Ho_Chi_Minh`
+
+If Airflow containers are rebuilt, these fixes are already in the code.
 
 ---
 

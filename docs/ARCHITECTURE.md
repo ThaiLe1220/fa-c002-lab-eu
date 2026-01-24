@@ -159,39 +159,62 @@ PYTHON COLLECTION           SNOWFLAKE RAW              DBT TRANSFORMATION       
 
 ---
 
-## System 2: Streaming (Checkbox)
+## System 2: Streaming (DONE)
 
 ### Architecture
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ Fake Producer   │────▶│  Kafka Topic    │────▶│    Consumer     │
-│ (Python)        │     │  (Docker)       │     │    (Python)     │
+│  Producer       │────▶│  Kafka Topic    │────▶│    Consumer     │
+│  (fake alerts)  │     │  (KRaft mode)   │     │    (Python)     │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
-                                │
-                                ▼
-                        ┌─────────────────┐
-                        │  Agent Tool     │
-                        │  (query latest) │
-                        └─────────────────┘
+                                                        │
+                                                        ▼
+                                                ┌─────────────────┐
+                                                │   PostgreSQL    │
+                                                │   (port 5433)   │
+                                                │   alerts table  │
+                                                └─────────────────┘
+                                                        │
+                                                        ▼
+                                                ┌─────────────────┐
+                                                │  Agent Tool     │
+                                                │  (query alerts) │
+                                                └─────────────────┘
 ```
 
 ### Purpose
 
+- Real-time alert monitoring (UNRELATED to batch data)
 - Demonstrate streaming capability for grading
 - Independent from batch pipeline
-- Uses simulated/fake data
+
+### Alert Types
+
+| Type | Description |
+|------|-------------|
+| SPEND_SPIKE | Unusual spend pattern detected |
+| ROAS_DROP | Return on ad spend below threshold |
+| INSTALL_SURGE | Unusual install volume |
+| ERROR_RATE | System errors increased |
 
 ### Components
 
 | Component | Location | Description |
 |-----------|----------|-------------|
-| Docker setup | `kafka/docker-compose.yml` | Kafka + Zookeeper |
-| Producer | `kafka/producer.py` | Generate fake metrics |
-| Consumer | `kafka/consumer.py` | Read and store |
-| Agent tool | `agent/tools/kafka_tools.py` | Query latest data |
+| Docker setup | `kafka/docker-compose.yml` | Kafka (KRaft) + PostgreSQL |
+| Producer | `kafka/producer.py` | Generate fake alerts (batch mode: `--batch 20`) |
+| Consumer | `kafka/consumer.py` | Write alerts to PostgreSQL |
+| Agent tool | `agent/tools/kafka_tools.py` | Query alerts from PostgreSQL |
 
-**NOT required:** Push to Snowflake, integrate with batch flow
+### Ports
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| Kafka | 29092 | Broker (external) |
+| PostgreSQL | 5433 | Streaming sink (NOT 5432 to avoid conflicts) |
+
+**Key:** Streaming data goes to PostgreSQL, NOT Snowflake. Agent queries PostgreSQL directly.
 
 ---
 

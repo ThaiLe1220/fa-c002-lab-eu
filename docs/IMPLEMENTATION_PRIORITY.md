@@ -3,44 +3,42 @@
 **Definitive execution order with reasoning. Read this before coding.**
 
 **Created:** January 24, 2026
+**Updated:** January 24, 2026 (Kafka + Airflow DONE)
 **Deadline:** January 24, 2026 (DEMO DAY)
-**Current Score:** ~55 pts
+**Current Score:** ~70 pts
 **Target Score:** 85+ pts
 
 ---
 
 ## Executive Summary
 
-### The Reality Check
+### Current Status
 
-| Category | What We Have | What's Missing | Impact |
-|----------|--------------|----------------|--------|
-| **Core (60 pts)** | ~35 pts | Kafka, Airflow, RAG | -25 pts |
-| **Extra (40 pts)** | ~20 pts | Documentation of features | -20 pts |
+| Category | Status | Points |
+|----------|--------|--------|
+| **Core (60 pts)** | Kafka DONE, Airflow DONE, RAG pending | ~50 pts |
+| **Extra (40 pts)** | Agent with business context | ~20 pts |
 
-**Critical insight:** Without the 3 checkboxes (Kafka, Airflow, RAG), we CANNOT get full core points. These are **blocking requirements**, not nice-to-haves.
-
-### The Priority Order
+### Remaining Priority Order
 
 ```
-MUST DO (Core Points - Blocking)
-================================
-1. Kafka Setup      → 30-45 min → Unblocks 7.5 pts
-2. Airflow Setup    → 30-45 min → Unblocks 7.5 pts
-3. Basic RAG        → 45-60 min → Unblocks 10 pts
-4. Kafka Agent Tool → 15 min    → Unblocks 5 pts
+MUST DO (Core Points - Still Blocking)
+======================================
+[x] Kafka Setup      → DONE (7.5 pts)
+[x] Airflow Setup    → DONE (7.5 pts)
+[x] Kafka Agent Tool → DONE (5 pts)
+[ ] Basic RAG        → 45-60 min → Unblocks 10 pts
 
 SHOULD DO (Extra Points - Quick Wins)
 =====================================
-5. dbt Macros       → 30 min    → 10-15 pts
-6. dbt-expectations → 30 min    → 10-15 pts
-7. Enhanced Prompts → 20 min    → 5-10 pts (document existing)
+[ ] dbt Macros       → 30 min    → 10-15 pts
+[ ] dbt-expectations → 30 min    → 10-15 pts
+[ ] Enhanced Prompts → 20 min    → 5-10 pts
 
-NICE TO HAVE (Extra Points - High Effort)
-=========================================
-8. Hybrid RAG       → 1-2 hrs   → 15-20 pts
-9. Multi-Model      → 2-3 hrs   → 15-20 pts
-10. Error Handling  → 1 hr      → 10 pts
+NICE TO HAVE (If Time Permits)
+==============================
+[ ] Hybrid RAG       → 1-2 hrs   → 15-20 pts
+[ ] Multi-Model      → 2-3 hrs   → 15-20 pts
 ```
 
 ---

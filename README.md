@@ -53,8 +53,10 @@ uv run streamlit run agent/app.py
 │                 │                              │                             │
 │                 ▼                              ▼                             │
 │  ┌─────────────────────────────────┐    ┌─────────────┐                     │
-│  │    Airflow (dbt orchestration)  │    │  Consumer   │                     │
-│  │   debug → run → test            │    └──────┬──────┘                     │
+│  │    Airflow (FULL orchestration) │    │  Consumer   │                     │
+│  │  collect_admob ─┐               │    └──────┬──────┘                     │
+│  │                 ├→ dbt pipeline │                                        │
+│  │  collect_adjust ┘               │                                        │
 │  └──────────────┬──────────────────┘           │                            │
 │                 │                              ▼                             │
 │                 ▼                       ┌─────────────┐                      │
@@ -84,7 +86,8 @@ uv run streamlit run agent/app.py
 ```
 
 **Data Flow Summary:**
-- **Batch:** AdMob/Adjust APIs → Python Scripts → Snowflake RAW → dbt → ANALYTICS
+- **Batch (Airflow orchestrated):** AdMob/Adjust APIs → Snowflake RAW → dbt → ANALYTICS
+  - 5 tasks: collect_admob, collect_adjust, dbt_debug, dbt_run, dbt_test
 - **Streaming:** Kafka Producer → Kafka → Consumer → PostgreSQL alerts
 - **RAG:** Business Rules Doc → FAISS Vector Store → Semantic Search
 

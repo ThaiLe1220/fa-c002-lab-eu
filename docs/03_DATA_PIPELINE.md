@@ -308,33 +308,84 @@ cd my_dbt_project && dbt test --select "stg_admob_capstone"
 **DAG:** `capstone_dbt_pipeline`
 **Location:** `airflow/dags/dbt_pipeline.py`
 
+### Full Pipeline (5 Tasks)
+
 ```
-dbt_debug (4s) → dbt_run (24s) → dbt_test (3s)
+collect_admob ─┐
+               ├─→ dbt_debug → dbt_run → dbt_test
+collect_adjust ┘
 ```
 
-**Configuration:**
+| Task | Duration | Description |
+|------|----------|-------------|
+| `collect_admob` | ~15s | AdMob API → Snowflake RAW_CAPSTONE.ADMOB_DAILY |
+| `collect_adjust` | ~15s | Adjust API → Snowflake RAW_CAPSTONE.ADJUST_DAILY |
+| `dbt_debug` | ~4s | Verify Snowflake connection |
+| `dbt_run` | ~21s | Run all dbt models (staging → mart) |
+| `dbt_test` | ~2s | Run 26 data quality tests |
+
+**Key:** Data collection runs in parallel, then dbt runs sequentially.
+
+### Configuration
+
 - Schedule: `None` (manual trigger for demo)
 - Timezone: `Asia/Ho_Chi_Minh`
-- Retries: 2
+- Retries: 2 per task
 - Retry delay: 5 minutes
 
-**Trigger via CLI:**
+### Environment Variables (in docker-compose.yml)
+
+```yaml
+SNOWFLAKE_ACCOUNT: LNB11254
+SNOWFLAKE_USER: T34
+SNOWFLAKE_ROLE: RL_T34
+SNOWFLAKE_WAREHOUSE: WH_T34
+SNOWFLAKE_DATABASE: DB_T34
+SNOWFLAKE_SCHEMA: ANALYTICS
+SNOWFLAKE_PRIVATE_KEY_PATH: /opt/airflow/keys/rsa_key.p8
+```
+
+### Volume Mounts
+
+```yaml
+volumes:
+  - ./dags:/opt/airflow/dags
+  - ../my_dbt_project:/opt/airflow/dbt_project
+  - ~/.snowflake/keys:/opt/airflow/keys:ro
+  - ./profiles.yml:/opt/airflow/.dbt/profiles.yml:ro
+  - ../scripts:/opt/airflow/scripts:ro      # Data collection scripts
+  - ../.secret:/opt/airflow/.secret:ro      # API credentials
+  - ../data:/opt/airflow/data               # Output data
+```
+
+### Trigger Commands
+
 ```bash
 # Unpause and trigger
 docker exec airflow-webserver airflow dags unpause capstone_dbt_pipeline
 docker exec airflow-webserver airflow dags trigger capstone_dbt_pipeline
 
-# Check status
-docker exec airflow-webserver airflow dags list-runs -d capstone_dbt_pipeline -o table
+# Check task status
+docker exec airflow-webserver airflow tasks states-for-dag-run capstone_dbt_pipeline $(docker exec airflow-webserver airflow dags list-runs -d capstone_dbt_pipeline -o plain | head -1 | awk '{print $2}')
 ```
 
-**Trigger via UI:**
+**Expected output:**
+```
+collect_admob  | success
+collect_adjust | success
+dbt_debug      | success
+dbt_run        | success
+dbt_test       | success
+```
+
+### Trigger via UI
+
 1. Open http://localhost:8080
 2. Login: admin / admin
 3. Find `capstone_dbt_pipeline`
 4. Click play button → "Trigger DAG"
 
-**Verified run time:** ~31 seconds total (all tasks SUCCESS)
+**Verified run time:** ~60 seconds total (all 5 tasks SUCCESS)
 
 ---
 

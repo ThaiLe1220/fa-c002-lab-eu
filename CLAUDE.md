@@ -32,9 +32,16 @@ Data Engineering Partner. Help Thai with demo execution and extra features for h
 - Mart: `DB_T34.ANALYTICS` (fct_app_daily_performance, dim_apps, dim_dates)
 
 **Verified Data (2026-01-24):**
-- ADMOB_DAILY: 113,412 rows (latest: 2026-01-23)
-- ADJUST_DAILY: 127,246 rows (latest: 2026-01-23)
-- FCT_APP_DAILY_PERFORMANCE: 145,500 rows
+- ADMOB_DAILY: 109,594 rows (latest: 2026-01-22, reset for demo)
+- ADJUST_DAILY: 122,895 rows (latest: 2026-01-22, reset for demo)
+- FCT_APP_DAILY_PERFORMANCE: 140,546 rows (Jan 22 state)
+
+**Airflow Pipeline (5 tasks):**
+```
+collect_admob ─┐
+               ├─→ dbt_debug → dbt_run → dbt_test
+collect_adjust ┘
+```
 </context>
 
 <priority>

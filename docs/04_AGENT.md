@@ -55,6 +55,7 @@ User Question
 - Cost questions: "How much did we spend?"
 - Metric questions: "What's our D0 ROAS?"
 - Historical data: "Show me last week's performance"
+- Profitability: "Which apps are most profitable?"
 
 **How it works:**
 ```python
@@ -66,12 +67,27 @@ def query_snowflake(sql_query: str) -> str:
     return df.to_string(index=False)
 ```
 
-**Example:**
+**Example - Simple revenue:**
 ```sql
 SELECT SUM(ad_revenue) as total_revenue
 FROM fct_app_daily_performance
 WHERE date >= '2026-01-01'
 ```
+
+**Example - ROAS query (important):**
+```sql
+-- Many apps have no cost data (ROAS=NULL), so filter them out
+SELECT a.app_name,
+       ROUND(SUM(f.ad_revenue_d0) / NULLIF(SUM(f.network_cost), 0) * 100, 1) as d0_roas
+FROM fct_app_daily_performance f
+JOIN dim_apps a ON f.app_key = a.app_key
+GROUP BY a.app_name
+HAVING SUM(f.network_cost) > 0  -- Exclude apps without cost data
+ORDER BY d0_roas DESC NULLS LAST
+LIMIT 10
+```
+
+**Schema context:** The tool includes comprehensive schema documentation for the LLM, including table structures, metric formulas, and ROAS query guidance.
 
 ---
 
@@ -254,36 +270,38 @@ uv run python agent/rag_demo.py
 ```
 You: What's our total revenue for the latest date?
 Agent: [Uses query_snowflake]
-       1. **Total Revenue**: $8,761.55
-       2. **Date**: Latest available date in the dataset.
+       Total Revenue: $8,761.55 for the latest date (2026-01-23)
 
-You: Show me recent alerts
+You: Which apps are most profitable?
+Agent: [Uses query_snowflake]
+       Top 3 apps by D0 ROAS:
+       1. Voice Recorder: 126.9%
+       2. Emi Calculator: 122.9%
+       3. Expense Planner: 106.1%
+
+You: Show me recent critical alerts
 Agent: [Uses query_realtime_alerts]
-       1. **Critical - ROAS_DROP**
-          - Region: FR
-          - Value: $2,543.67
-          - Timestamp: 2026-01-24 12:07:23
-       2. **Warning - SPEND_SPIKE**
-          - Region: ID
-          - Value: $1,578.23
-          ...
+       Critical Alert - ROAS_DROP
+       - Region: GB
+       - Value: $4,111.70
+       - Timestamp: 2026-01-24 13:36:00
+       Insight: Significant drop in ROAS for GB campaigns requires investigation.
 
-You: What is the ROAS threshold for campaigns?
+You: What is the ROAS threshold for scaling campaigns?
 Agent: [Uses search_business_documents]
-       The ROAS thresholds for campaigns are:
-       | D0 ROAS | Status     | Action                     |
-       |---------|------------|----------------------------|
-       | > 100%  | Profitable | Scale spend by 20-50%     |
-       | 80-100% | Marginal   | Hold, monitor D7 recovery |
-       | 60-80%  | Losing     | Reduce spend by 30%       |
-       | < 60%   | Critical   | Pause campaigns immediately|
+       ROAS thresholds for scaling:
+       - D0 ROAS > 100%: Profitable - Scale spend by 20-50%
+       - D0 ROAS 80-100%: Marginal - Hold and monitor D7 recovery
+       - D0 ROAS 60-80%: Losing - Reduce spend by 30%
+       - D0 ROAS < 60%: Critical - Pause campaigns immediately
 
-You: Which apps are losing money based on our thresholds?
+You: Based on our thresholds, which apps from yesterday are losing money?
 Agent: [Uses query_snowflake + search_business_documents]
-       Apps with D0 ROAS < 80%:
-       - Video AI Generator: 67.71%
-       - fantasy.roleplay.chat: 34.03%
-       - com.chatbotai.chatwithai: 54.37%
+       Apps with D0 ROAS < 80% (losing money):
+       1. 6754137856: 0.0%
+       2. ai.video.template.videogenerator: 2.8%
+       3. authenticator.two.step.authentication: 5.8%
+       4. ai.video.maker.videogenerator: 7.3%
        ...
        Recommendation: Review marketing strategies for these apps.
 ```

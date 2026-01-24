@@ -1,7 +1,8 @@
 # Project Progress
 
-**Last Updated:** 2026-01-24 (Verified)
+**Last Updated:** 2026-01-24 13:45 (Final Demo Prep)
 **Demo:** Saturday 2026-01-24
+**State:** Clean (Jan 22 data, ready for BEFORE/AFTER demo)
 
 ---
 
@@ -39,12 +40,19 @@
 | 02_intermediate | int_app_daily_metrics | ✅ WORKS |
 | 03_mart | fct_app_daily_performance, dim_apps, dim_dates | ✅ WORKS |
 
-**Verified Data (2026-01-24):**
+**Verified Data (2026-01-24 - Clean State for Demo):**
+| Table | Rows | Latest Date |
+|-------|------|-------------|
+| RAW_CAPSTONE.ADMOB_DAILY | 109,594 | 2026-01-22 |
+| RAW_CAPSTONE.ADJUST_DAILY | 122,895 | 2026-01-22 |
+| ANALYTICS.FCT_APP_DAILY_PERFORMANCE | 140,546 | 2026-01-22 |
+
+**After Airflow pipeline runs (BEFORE/AFTER proof):**
 | Table | Rows | Latest Date |
 |-------|------|-------------|
 | RAW_CAPSTONE.ADMOB_DAILY | 113,412 | 2026-01-23 |
-| RAW_CAPSTONE.ADJUST_DAILY | 127,246 | 2026-01-23 |
-| ANALYTICS.FCT_APP_DAILY_PERFORMANCE | 145,500 | 2026-01-23 |
+| RAW_CAPSTONE.ADJUST_DAILY | 127,251 | 2026-01-23 |
+| ANALYTICS.FCT_APP_DAILY_PERFORMANCE | 145,503 | 2026-01-23 |
 
 ### 3. Kafka Streaming
 - **Location:** `kafka/`
@@ -57,8 +65,19 @@
 ### 4. Airflow Orchestration
 - **Location:** `airflow/`
 - **DAG:** `capstone_dbt_pipeline` (manual trigger)
-- **Tasks:** dbt_debug (4s) → dbt_run (24s) → dbt_test (3s)
-- **Verified:** Full DAG run SUCCESS in ~31 seconds
+- **Tasks (5 total):**
+  ```
+  collect_admob ─┐
+                 ├─→ dbt_debug → dbt_run → dbt_test
+  collect_adjust ┘
+  ```
+- **Task breakdown:**
+  - `collect_admob` (15s) - Calls AdMob API → Snowflake RAW
+  - `collect_adjust` (15s) - Calls Adjust API → Snowflake RAW
+  - `dbt_debug` (4s) - Verify Snowflake connection
+  - `dbt_run` (21s) - Run dbt models
+  - `dbt_test` (2s) - Run 26 dbt tests
+- **Verified:** Full DAG run SUCCESS (~60 seconds total)
 
 ### 5. AI Agent (3 Tools)
 - **Location:** `agent/`
@@ -72,8 +91,10 @@
 
 **Verified queries:**
 - "What's our total revenue?" → $8,761.55 (latest date)
-- "Show me recent alerts" → Returns alerts with severity, region
+- "Which apps are most profitable?" → Voice Recorder (126.9%), Emi Calculator (122.9%)
+- "Show me recent critical alerts" → Returns alerts with severity, region, value
 - "What is the ROAS threshold?" → Returns 80% threshold from RAG
+- "Which apps are losing money?" → Combined Snowflake + RAG query
 
 ---
 

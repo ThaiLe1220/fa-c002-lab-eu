@@ -24,6 +24,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from agent.config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_TEMPERATURE
 from agent.prompts import SYSTEM_PROMPT
 from agent.tools.snowflake_tools import query_snowflake
+from agent.tools.kafka_tools import query_realtime_alerts
 
 
 # Initialize LLM with tools
@@ -34,7 +35,7 @@ llm = ChatOpenAI(
 )
 
 # Bind tools to LLM
-tools = [query_snowflake]
+tools = [query_snowflake, query_realtime_alerts]
 llm_with_tools = llm.bind_tools(tools)
 
 

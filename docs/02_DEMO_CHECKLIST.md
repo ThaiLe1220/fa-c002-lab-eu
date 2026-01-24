@@ -43,7 +43,7 @@ uv run python kafka/producer.py --batch 20 --interval 0
 
 **VERIFY:**
 ```bash
-docker exec capstone-streaming-db psql -U postgres -d streaming -c "SELECT COUNT(*) FROM alerts;"
+docker exec capstone-postgres psql -U capstone -d streaming -c "SELECT COUNT(*) FROM alerts;"
 ```
 
 **Expected:** count >= 20
@@ -91,8 +91,8 @@ uv run python kafka/producer.py --batch 5 --interval 2
 
 **VERIFY:**
 ```bash
-docker exec capstone-streaming-db psql -U postgres -d streaming -c \
-  "SELECT id, alert_type, severity, app_id, created_at FROM alerts ORDER BY created_at DESC LIMIT 5;"
+docker exec capstone-postgres psql -U capstone -d streaming -c \
+  "SELECT id, alert_type, severity, region, created_at FROM alerts ORDER BY created_at DESC LIMIT 5;"
 ```
 
 **Expected:** Shows 5 recent alerts with timestamps from just now
@@ -290,8 +290,8 @@ Show me critical alerts
 
 **VERIFY:**
 ```bash
-docker exec capstone-streaming-db psql -U postgres -d streaming -c \
-  "SELECT alert_type, severity, app_id, created_at FROM alerts WHERE severity='critical' ORDER BY created_at DESC LIMIT 5;"
+docker exec capstone-postgres psql -U capstone -d streaming -c \
+  "SELECT alert_type, severity, region, created_at FROM alerts WHERE severity='critical' ORDER BY created_at DESC LIMIT 5;"
 ```
 
 **SAY:** "Agent queried PostgreSQL where Kafka consumer writes alerts"
@@ -417,7 +417,7 @@ uv run python kafka/producer.py --batch 20 --interval 0
 
 # === PHASE 1: STREAMING ===
 uv run python kafka/producer.py --batch 5 --interval 2
-docker exec capstone-streaming-db psql -U postgres -d streaming -c "SELECT * FROM alerts ORDER BY created_at DESC LIMIT 5;"
+docker exec capstone-postgres psql -U capstone -d streaming -c "SELECT * FROM alerts ORDER BY created_at DESC LIMIT 5;"
 
 # === PHASE 2: BATCH ===
 uv run python scripts/collect_admob_capstone.py --days 1

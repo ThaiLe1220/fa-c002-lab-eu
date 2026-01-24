@@ -176,11 +176,15 @@ gh run view <run-id> --log 2>&1 | grep -E "PASS|Completed|sqlfluff|All Finished"
 
 ---
 
-## PHASE 2: Batch Pipeline (5 min)
+## PHASE 2: Batch Pipeline via Airflow (5 min)
+
+**KEY POINT:** Airflow orchestrates the FULL pipeline (5 tasks):
+```
+collect_admob → collect_adjust → dbt_debug → dbt_run → dbt_test
+```
 
 ### 2.1 Show BEFORE State (1 min)
 
-**Run from terminal:**
 ```bash
 cd ~/code_personal/fa-c002-lab
 uv run python -c "
@@ -188,137 +192,105 @@ from scripts.utils.snowflake_client import get_snowflake_client
 client = get_snowflake_client(schema='RAW_CAPSTONE')
 conn = client.connect()
 cursor = conn.cursor()
-cursor.execute('''
-SELECT COUNT(*) as row_count, MAX(DATE) as latest_date, MAX(LOADED_AT) as last_loaded
-FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY
-''')
-row = cursor.fetchone()
-print(f'BEFORE - RAW layer:')
-print(f'  Row count: {row[0]}')
-print(f'  Latest date: {row[1]}')
-print(f'  Last loaded: {row[2]}')
-client.close()
-"
-```
 
-**SAY:** "Current state: ~109K rows, latest date is **Jan 22**. No Jan 23 data yet."
-
----
-
-### 2.2 Run Batch Collection (2 min)
-
-```bash
-cd ~/code_personal/fa-c002-lab
-uv run python scripts/collect_admob_capstone.py --days 1
-```
-
-**Shows:** `✓ Loaded 3,818 rows to Snowflake`
-
-**IMMEDIATELY verify AFTER state:**
-```bash
-uv run python -c "
-from scripts.utils.snowflake_client import get_snowflake_client
-client = get_snowflake_client(schema='RAW_CAPSTONE')
-conn = client.connect()
-cursor = conn.cursor()
-cursor.execute('''
-SELECT COUNT(*) as row_count, MAX(DATE) as latest_date, MAX(LOADED_AT) as last_loaded
-FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY
-''')
-row = cursor.fetchone()
-print(f'AFTER - RAW layer:')
-print(f'  Row count: {row[0]}')
-print(f'  Latest date: {row[1]}')
-print(f'  Last loaded: {row[2]}')
+print('=== BEFORE STATE ===')
 print()
-cursor.execute(\"\"\"
-SELECT RAW_RECORD_ID, DATE, APP_STORE_ID, LOADED_AT
-FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY
-WHERE DATE = '20260123'
-ORDER BY LOADED_AT DESC LIMIT 5
-\"\"\")
-print('NEW Jan 23 rows:')
-for row in cursor.fetchall():
-    print(f'  {row[0][:30]}... | {row[1]} | {row[2][:25]}... | {row[3]}')
-client.close()
-"
-```
+print('RAW LAYER:')
+cursor.execute('SELECT COUNT(*), MAX(DATE) FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY')
+row = cursor.fetchone()
+print(f'  ADMOB_DAILY: {row[0]:,} rows, max date: {row[1]}')
 
-**SAY:** "Row count increased from 109K to 113K. **New date Jan 23 appeared**. These RAW_RECORD_IDs are brand new."
+cursor.execute('SELECT COUNT(*), MAX(DAY) FROM DB_T34.RAW_CAPSTONE.ADJUST_DAILY')
+row = cursor.fetchone()
+print(f'  ADJUST_DAILY: {row[0]:,} rows, max date: {row[1]}')
 
----
+print()
+print('ANALYTICS LAYER:')
+cursor.execute('SELECT MAX(DATE) FROM DB_T34.ANALYTICS.DIM_DATES')
+print(f'  DIM_DATES max date: {cursor.fetchone()[0]}')
 
-### 2.3 Run dbt via Airflow (2 min)
-
-**BEFORE dbt - Show ANALYTICS only has Jan 22:**
-```bash
-cd ~/code_personal/fa-c002-lab
-uv run python -c "
-from scripts.utils.snowflake_client import get_snowflake_client
-client = get_snowflake_client(schema='ANALYTICS')
-conn = client.connect()
-cursor = conn.cursor()
 cursor.execute('''
-SELECT MAX(d.DATE) as latest_date, COUNT(*) as row_count
+SELECT COUNT(*), MAX(d.DATE)
 FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE f
 JOIN DB_T34.ANALYTICS.DIM_DATES d ON f.DATE_KEY = d.DATE_KEY
 ''')
 row = cursor.fetchone()
-print(f'BEFORE dbt - ANALYTICS: Latest={row[0]}, Rows={row[1]}')
+print(f'  FCT rows: {row[0]:,}, max date: {row[1]}')
+
 client.close()
 "
 ```
 
-**SAY:** "ANALYTICS has data up to Jan 22. Let's run dbt to transform the new Jan 23 data."
+**SAY:** "Current state: RAW and ANALYTICS both at **Jan 22**. No Jan 23 data yet."
 
-**Trigger Airflow:**
+---
+
+### 2.2 Trigger Full Pipeline via Airflow (3 min)
+
+**Trigger the 5-task pipeline:**
 ```bash
 docker exec airflow-webserver airflow dags unpause capstone_dbt_pipeline
 docker exec airflow-webserver airflow dags trigger capstone_dbt_pipeline
 ```
 
-**Check status (wait ~40s):**
+**SAY:** "Airflow is now running 5 tasks: collect_admob, collect_adjust (API calls), then dbt_debug, dbt_run, dbt_test."
+
+**Wait and check status (~90s for full pipeline):**
 ```bash
-sleep 40
-docker exec airflow-webserver airflow dags list-runs -d capstone_dbt_pipeline -o table
+sleep 90
+docker exec airflow-webserver airflow tasks states-for-dag-run capstone_dbt_pipeline $(docker exec airflow-webserver airflow dags list-runs -d capstone_dbt_pipeline -o plain | head -1 | awk '{print $2}')
 ```
 
-**Run local dbt build to ensure data is visible:**
-```bash
-cd ~/code_personal/fa-c002-lab/my_dbt_project && dbt build && cd ..
+**Expected output - ALL 5 TASKS SUCCESS:**
+```
+collect_admob  | success
+collect_adjust | success
+dbt_debug      | success
+dbt_run        | success
+dbt_test       | success
 ```
 
-**AFTER dbt success - Show Jan 23 flowed through:**
+---
+
+### 2.3 Verify AFTER State (1 min)
+
 ```bash
+cd ~/code_personal/fa-c002-lab
 uv run python -c "
 from scripts.utils.snowflake_client import get_snowflake_client
-client = get_snowflake_client(schema='ANALYTICS')
+client = get_snowflake_client(schema='RAW_CAPSTONE')
 conn = client.connect()
 cursor = conn.cursor()
+
+print('=== AFTER STATE ===')
+print()
+print('RAW LAYER:')
+cursor.execute('SELECT COUNT(*), MAX(DATE) FROM DB_T34.RAW_CAPSTONE.ADMOB_DAILY')
+row = cursor.fetchone()
+print(f'  ADMOB_DAILY: {row[0]:,} rows, max date: {row[1]}')
+
+cursor.execute('SELECT COUNT(*), MAX(DAY) FROM DB_T34.RAW_CAPSTONE.ADJUST_DAILY')
+row = cursor.fetchone()
+print(f'  ADJUST_DAILY: {row[0]:,} rows, max date: {row[1]}')
+
+print()
+print('ANALYTICS LAYER:')
+cursor.execute('SELECT MAX(DATE) FROM DB_T34.ANALYTICS.DIM_DATES')
+print(f'  DIM_DATES max date: {cursor.fetchone()[0]}')
+
 cursor.execute('''
-SELECT MAX(d.DATE) as latest_date, COUNT(*) as row_count
+SELECT COUNT(*), MAX(d.DATE)
 FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE f
 JOIN DB_T34.ANALYTICS.DIM_DATES d ON f.DATE_KEY = d.DATE_KEY
 ''')
 row = cursor.fetchone()
-print(f'AFTER dbt - ANALYTICS: Latest={row[0]}, Rows={row[1]}')
-print()
-cursor.execute(\"\"\"
-SELECT d.DATE, a.APP_NAME, f.AD_REVENUE, f.DBT_UPDATED_AT
-FROM DB_T34.ANALYTICS.FCT_APP_DAILY_PERFORMANCE f
-JOIN DB_T34.ANALYTICS.DIM_DATES d ON f.DATE_KEY = d.DATE_KEY
-JOIN DB_T34.ANALYTICS.DIM_APPS a ON f.APP_KEY = a.APP_KEY
-WHERE d.DATE = '2026-01-23'
-ORDER BY f.AD_REVENUE DESC LIMIT 5
-\"\"\")
-print('NEW Jan 23 rows in ANALYTICS:')
-for row in cursor.fetchall():
-    print(f'  {row[0]} | {str(row[1])[:25]:<25} | \${row[2]:>8,.2f}')
+print(f'  FCT rows: {row[0]:,}, max date: {row[1]}')
+
 client.close()
 "
 ```
 
-**SAY:** "Airflow orchestrated dbt. Jan 23 data now in ANALYTICS. Row count increased."
+**SAY:** "Airflow orchestrated the FULL pipeline. Both RAW and ANALYTICS now have **Jan 23** data. Row counts increased."
 
 ---
 
@@ -503,16 +475,24 @@ cd ~/code_personal/fa-c002-lab/my_dbt_project && dbt clean && dbt deps && dbt bu
 
 ---
 
-## VERIFIED RESULTS (2026-01-24)
+## VERIFIED RESULTS (2026-01-24 13:24)
 
 | Metric | BEFORE | AFTER |
 |--------|--------|-------|
 | RAW_CAPSTONE.ADMOB_DAILY rows | 109,594 | 113,412 |
 | RAW_CAPSTONE.ADMOB_DAILY max date | 20260122 | 20260123 |
-| ANALYTICS.FCT rows | 140,546 | 144,364 |
+| RAW_CAPSTONE.ADJUST_DAILY rows | 122,895 | 127,251 |
+| RAW_CAPSTONE.ADJUST_DAILY max date | 2026-01-22 | 2026-01-23 |
+| ANALYTICS.FCT rows | 140,546 | 145,503 |
 | ANALYTICS max date | 2026-01-22 | 2026-01-23 |
-| PostgreSQL alerts | 31 | 38 |
-| ANALYTICS.FCT rows | 140,546 | 144,364 |
+| PostgreSQL alerts | ~20 | ~25+ |
+
+**Airflow Pipeline Tasks (all success):**
+- collect_admob (15s)
+- collect_adjust (15s)
+- dbt_debug (4s)
+- dbt_run (21s)
+- dbt_test (2s)
 
 ---
 
@@ -520,14 +500,14 @@ cd ~/code_personal/fa-c002-lab/my_dbt_project && dbt clean && dbt deps && dbt bu
 
 | Requirement | Demo Proof |
 |-------------|------------|
-| ✅ Batch data source | AdMob API → Snowflake RAW |
+| ✅ Batch data source | AdMob + Adjust APIs → Snowflake RAW |
 | ✅ Streaming < 5 min | Kafka timestamps show < 1s |
-| ✅ Airflow 3+ tasks | debug → run → test |
-| ✅ `#live-demo` NEW data | BEFORE/AFTER row count + RAW_RECORD_ID |
+| ✅ Airflow 3+ tasks | **5 tasks**: collect_admob, collect_adjust, dbt_debug, dbt_run, dbt_test |
+| ✅ `#live-demo` NEW data | BEFORE/AFTER row count + dates |
 | ✅ Star schema | dim_apps, dim_dates, fct_* |
 | ✅ dbt incremental | Row count increase, no duplicates |
 | ✅ dbt test | 26 tests pass |
-| ✅ `#live-demo` dbt via Airflow | Trigger + success |
+| ✅ `#live-demo` dbt via Airflow | Trigger + all 5 tasks success |
 | ✅ CI/CD 2 checks | SQLFluff + dbt test |
 | ✅ README + Architecture | README.md exists |
 | ✅ Chatbot with memory | Multi-turn conversation |

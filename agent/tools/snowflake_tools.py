@@ -83,9 +83,10 @@ impdau = SUM(ad_impressions) / NULLIF(SUM(daus), 0)
 ```
 
 ## Data Context
-- Date range: Dec 25, 2025 to Jan 22, 2026 (29 days)
+- Date range: Dec 25, 2025 to present (updated daily)
 - Apps: 59 apps
 - Countries: 240 countries
+- Use MAX(date) FROM dim_dates to get the latest date
 """
 
 

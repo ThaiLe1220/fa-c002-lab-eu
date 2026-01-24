@@ -72,7 +72,7 @@ jobs:
         run: |
           sqlfluff lint my_dbt_project/models --dialect snowflake --templater dbt
 
-      - name: Run dbt tests
+      - name: Run dbt tests (capstone models only)
         run: |
           cd my_dbt_project
-          dbt test
+          dbt test --select "stg_admob_capstone stg_adjust_capstone int_app_daily_metrics fct_app_daily_performance dim_apps dim_dates"

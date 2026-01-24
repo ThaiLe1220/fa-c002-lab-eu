@@ -25,6 +25,7 @@ from agent.config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_TEMPERATURE
 from agent.prompts import SYSTEM_PROMPT
 from agent.tools.snowflake_tools import query_snowflake
 from agent.tools.kafka_tools import query_realtime_alerts
+from agent.tools.rag_tools import search_business_documents
 
 
 # Initialize LLM with tools
@@ -34,8 +35,8 @@ llm = ChatOpenAI(
     temperature=OPENAI_TEMPERATURE,
 )
 
-# Bind tools to LLM
-tools = [query_snowflake, query_realtime_alerts]
+# Bind tools to LLM - Three tools for three systems
+tools = [query_snowflake, query_realtime_alerts, search_business_documents]
 llm_with_tools = llm.bind_tools(tools)
 
 

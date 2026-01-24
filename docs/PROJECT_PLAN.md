@@ -9,24 +9,18 @@ graph LR
         P1[Phase 1-2<br/>Snowflake + dbt]
         P25[Phase 2.5<br/>Data Backfill]
         P3[Phase 3<br/>Kafka + Airflow]
-        P4A[Phase 4<br/>Agent Core]
-    end
-
-    subgraph "Current"
-        P4B[Phase 4<br/>RAG Tool]
+        P4[Phase 4<br/>AI Agent + RAG]
     end
 
     subgraph "To Do"
-        P5[Phase 5<br/>Demo]
+        P5[Phase 5<br/>Extra + Demo]
     end
 
-    P0 --> P1 --> P25 --> P4A
-    P25 --> P3 --> P5
-    P4A --> P4B --> P5
+    P0 --> P1 --> P25 --> P3 --> P4 --> P5
 
-    style P4B fill:#ffeb3b
+    style P4 fill:#4caf50,color:#fff
     style P3 fill:#4caf50,color:#fff
-    style P4A fill:#4caf50,color:#fff
+    style P5 fill:#ffeb3b
 ```
 
 **Related docs:**
@@ -57,10 +51,10 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 | Phase 3 | Kafka Streaming | DONE | 7.5 |
 | Phase 3 | Airflow Orchestration | DONE | 7.5 |
 | Phase 4 | AI Agent Core | DONE | 10 |
-| Phase 4 | RAG Tool | **IN PROGRESS** | 10 |
+| Phase 4 | RAG Tool | DONE | 10 |
 | Extra | dbt Macros, Tests | TO DO | 20+ |
 
-**Current Score:** ~70 pts | **Target:** 85+ pts
+**Current Score:** ~80 pts | **Target:** 85+ pts
 
 ---
 
@@ -72,16 +66,21 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 ┌─────────────────────────────────────────────────────────────────┐
 │                     AI AGENT (Orchestrator)                     │
 │              LangGraph + Memory + Business Context              │
+│                                                                 │
+│   ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐  │
+│   │ query_snowflake │ │ query_realtime  │ │ search_business │  │
+│   │                 │ │ _alerts         │ │ _documents      │  │
+│   └─────────────────┘ └─────────────────┘ └─────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
         │                    │                    │
         ▼                    ▼                    ▼
 ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
 │  BATCH DATA   │   │  STREAMING    │   │     RAG       │
-│  (Snowflake)  │   │  (Kafka)      │   │   (Docs)      │
+│  (Snowflake)  │   │  (Kafka)      │   │   (FAISS)     │
 ├───────────────┤   ├───────────────┤   ├───────────────┤
-│ Real data     │   │ Fake alerts   │   │ PDF docs      │
-│ dbt transform │   │ PostgreSQL    │   │ FAISS store   │
-│ CORE VALUE    │   │ DONE ✓        │   │ TO DO         │
+│ Real data     │   │ Fake alerts   │   │ Business rules│
+│ dbt transform │   │ PostgreSQL    │   │ OpenAI embed  │
+│ DONE ✓        │   │ DONE ✓        │   │ DONE ✓        │
 └───────────────┘   └───────────────┘   └───────────────┘
 ```
 
@@ -89,38 +88,60 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 
 ## Completed Work
 
-### Phase 3: Kafka + Airflow - DONE
+### Phase 4: AI Agent + RAG - DONE
 
-**Kafka Streaming:**
-- `kafka/docker-compose.yml` - Kafka (KRaft) + PostgreSQL containers
-- `kafka/producer.py` - Generates fake alerts (batch mode available)
-- `kafka/consumer.py` - Writes alerts to PostgreSQL (port 5433)
-- `agent/tools/kafka_tools.py` - Agent queries PostgreSQL alerts
-- **51 alerts** currently in streaming database
+**Agent Files:**
+| File | Description |
+|------|-------------|
+| `agent/config.py` | OpenAI configuration (loads from .env) |
+| `agent/prompts.py` | System prompt with 3-tool guidance |
+| `agent/agent.py` | LangGraph state machine with memory |
+| `agent/app.py` | Streamlit UI for demo |
 
-**Airflow Orchestration:**
-- `airflow/docker-compose.yml` - Airflow (LocalExecutor) + PostgreSQL
-- `airflow/dags/dbt_pipeline.py` - 3 tasks: debug → run → test
-- `airflow/Dockerfile` - Custom image with dbt-snowflake
-- DAG loaded and ready at http://localhost:8080
+**Three Tools:**
+| Tool | File | Purpose |
+|------|------|---------|
+| `query_snowflake` | `agent/tools/snowflake_tools.py` | Query batch data from Snowflake |
+| `query_realtime_alerts` | `agent/tools/kafka_tools.py` | Query streaming alerts from PostgreSQL |
+| `search_business_documents` | `agent/tools/rag_tools.py` | Search business rules via FAISS |
 
-### Phase 4: AI Agent Core - DONE
-
-**Files Created:**
-- `agent/config.py` - OpenAI configuration
-- `agent/prompts.py` - System prompt with business context
-- `agent/agent.py` - LangGraph state machine
-- `agent/app.py` - Streamlit UI
-- `agent/tools/snowflake_tools.py` - Snowflake query tool
-- `agent/tools/kafka_tools.py` - Real-time alerts tool
+**RAG Implementation:**
+| Component | Location | Description |
+|-----------|----------|-------------|
+| Business Rules | `docs/business_rules/ameno_business_rules.md` | ROAS thresholds, CPI benchmarks, alert definitions |
+| Vector Store | `agent/vector_store/` | FAISS index (auto-generated on first query) |
+| Demo Script | `agent/rag_demo.py` | Interactive demo showing chunking + embedding |
 
 **Test Results (9/10 Chi Linh Questions):**
 - Top spending app: PASS
 - Why metrics changed: PASS
 - D0 ROAS by country: PASS
 - Revenue breakdown: PASS
-- CPI analysis: PARTIAL
+- CPI analysis: PARTIAL (data gaps)
 - Break-even analysis: PASS
+
+### Phase 3: Kafka + Airflow - DONE
+
+**Kafka Streaming:**
+| File | Description |
+|------|-------------|
+| `kafka/docker-compose.yml` | Kafka (KRaft mode) + PostgreSQL containers |
+| `kafka/producer.py` | Generates fake alerts (supports `--batch N --interval 0`) |
+| `kafka/consumer.py` | Writes alerts to PostgreSQL (port 5433) |
+
+**Airflow Orchestration:**
+| File | Description |
+|------|-------------|
+| `airflow/docker-compose.yml` | Airflow (LocalExecutor) + PostgreSQL |
+| `airflow/Dockerfile` | Custom image with dbt-snowflake |
+| `airflow/dags/dbt_pipeline.py` | 3 tasks: dbt_debug → dbt_run → dbt_test |
+| `airflow/profiles.yml` | dbt profile for Docker environment |
+
+**Alert Types Generated:**
+- SPEND_SPIKE: Unusual spending pattern
+- ROAS_DROP: Return on ad spend decreased
+- INSTALL_SURGE: Unusual install volume
+- ERROR_RATE: System errors detected
 
 ### Phase 2.5: Data Backfill - DONE
 
@@ -136,21 +157,19 @@ AI chatbot that queries real AdMob/Adjust data to answer business questions for 
 
 ## Remaining Work
 
-### Priority 1: RAG Tool (10 pts)
-
-```
-agent/tools/rag_tools.py    # FAISS-based document search
-docs/Business_Rules.pdf      # Sample doc for demo
-docs/vector_store/           # FAISS index
-```
-
-### Priority 2: Extra Features (20+ pts)
+### Priority 1: Extra Features (20+ pts)
 
 | Feature | Points | Status |
 |---------|--------|--------|
 | dbt Macros (ROAS, CPI, eCPM) | 10-15 | TO DO |
 | dbt-expectations tests | 10-15 | TO DO |
-| Document prompts | 5-10 | Partial |
+
+### Priority 2: Demo Preparation
+
+- [ ] Collect fresh data (Jan 23-24)
+- [ ] Run dbt build with fresh data
+- [ ] Test all three agent tools
+- [ ] Practice demo script
 
 ---
 
@@ -159,20 +178,27 @@ docs/vector_store/           # FAISS index
 ```bash
 # Start all services
 cd kafka && docker-compose up -d
-cd airflow && docker-compose up -d
+cd ../airflow && docker-compose up -d
 
-# Generate fresh alerts
+# Generate fresh streaming alerts
 uv run python kafka/producer.py --batch 20 --interval 0
 
 # Run dbt
 cd my_dbt_project && dbt build
 
-# Test agent
-uv run python -m agent.agent -q "Show me recent alerts"
+# Test agent (CLI)
 uv run python -m agent.agent -q "What's total revenue this week?"
+uv run python -m agent.agent -q "Show me recent alerts"
+uv run python -m agent.agent -q "What are ROAS thresholds for scaling?"
+
+# Interactive mode
+uv run python -m agent.agent --interactive
 
 # Start Streamlit UI
 uv run streamlit run agent/app.py
+
+# RAG demo (explains chunking + embedding)
+uv run python agent/rag_demo.py
 ```
 
 ---
@@ -188,10 +214,57 @@ uv run streamlit run agent/app.py
 
 ---
 
+## Project Structure
+
+```
+fa-c002-lab/
+├── agent/                        # AI Agent (Phase 4) - DONE
+│   ├── config.py                 # OpenAI configuration
+│   ├── prompts.py                # System prompt with business context
+│   ├── agent.py                  # LangGraph state machine
+│   ├── app.py                    # Streamlit UI
+│   ├── rag_demo.py               # RAG explanation demo
+│   ├── vector_store/             # FAISS index (auto-generated)
+│   └── tools/
+│       ├── snowflake_tools.py    # Batch data queries
+│       ├── kafka_tools.py        # Real-time alerts
+│       └── rag_tools.py          # Document search
+├── kafka/                        # Streaming (Phase 3) - DONE
+│   ├── docker-compose.yml        # Kafka + PostgreSQL
+│   ├── producer.py               # Alert generator
+│   └── consumer.py               # PostgreSQL sink
+├── airflow/                      # Orchestration (Phase 3) - DONE
+│   ├── docker-compose.yml        # Airflow + PostgreSQL
+│   ├── Dockerfile                # Custom image with dbt
+│   ├── profiles.yml              # dbt profile
+│   └── dags/
+│       └── dbt_pipeline.py       # debug → run → test
+├── my_dbt_project/               # Transformation - DONE
+│   └── models/
+│       ├── 01_staging/
+│       ├── 02_intermediate/
+│       └── 03_mart/
+├── scripts/                      # Data collection - DONE
+│   ├── collect_adjust_capstone.py
+│   └── collect_admob_capstone.py
+├── docs/
+│   ├── business_rules/           # RAG documents
+│   │   └── ameno_business_rules.md
+│   ├── PROJECT_PLAN.md           # This file
+│   ├── DEMO_FLOW.md              # Demo script
+│   ├── ARCHITECTURE.md           # Technical details
+│   └── ...
+└── .github/workflows/
+    └── dbt_ci.yml                # SQLFluff + dbt test
+```
+
+---
+
 ## Revision History
 
 | Date | Change |
 |------|--------|
-| Jan 24, 2026 | Kafka + Airflow complete, updated status |
+| Jan 24, 2026 | RAG tool complete, all 3 agent tools working |
+| Jan 24, 2026 | Kafka + Airflow complete |
 | Jan 23, 2026 | AI Agent core complete (9/10 questions pass) |
 | Jan 22, 2026 | Data backfill complete (140K rows) |

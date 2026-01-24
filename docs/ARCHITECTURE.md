@@ -218,7 +218,7 @@ PYTHON COLLECTION           SNOWFLAKE RAW              DBT TRANSFORMATION       
 
 ---
 
-## System 3: RAG Documents (Checkbox)
+## System 3: RAG Documents (DONE)
 
 ### Architecture
 
@@ -245,11 +245,11 @@ PYTHON COLLECTION           SNOWFLAKE RAW              DBT TRANSFORMATION       
 
 | Component | Location | Description |
 |-----------|----------|-------------|
-| Loader | `agent/rag/document_loader.py` | Load and chunk PDFs |
-| Vector store | `agent/rag/vector_store.py` | Embed and store |
-| Agent tool | `agent/tools/rag_tools.py` | Retrieval tool |
+| Business Rules | `docs/business_rules/*.md` | ROAS thresholds, CPI benchmarks |
+| Vector store | `agent/vector_store/` | FAISS index (auto-generated) |
+| Agent tool | `agent/tools/rag_tools.py` | search_business_documents |
 
-**NOT required:** Complex chunking, production RAG
+**Implementation:** OpenAI embeddings + FAISS vector store, ~500 token chunks
 
 ---
 

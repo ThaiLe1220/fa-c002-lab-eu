@@ -2,15 +2,47 @@
 
 **Demo Day Script for FA-C002 Capstone**
 
+**Based on:** Official Capstone Demo Guide (capstone_demo_guide.md)
+
 **Date:** January 24, 2026
 **Duration:** 30 minutes
 **Presenter:** Thai Le
 
 ---
 
+## Official Demo Timeline
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       30-MINUTE DEMO                            │
+├─────────────────────────────────────────────────────────────────┤
+│ Phase 1: Real-time Pipeline (5 min)                             │
+│ ├─ CI/CD Initiation (1 min)          ← START CI JOB FIRST      │
+│ ├─ Data Flow Demo (3 min)            ← Kafka producer/consumer  │
+│ └─ CI/CD Results (1 min)             ← Return to show results   │
+├─────────────────────────────────────────────────────────────────┤
+│ Phase 2: Batch Pipeline (5 min)                                 │
+│ ├─ Airflow Setup (2 min)             ← Start Airflow            │
+│ ├─ Data Processing (2 min)           ← Trigger DAG, show dbt    │
+│ └─ Results Review (1 min)            ← Show completion          │
+├─────────────────────────────────────────────────────────────────┤
+│ Phase 3: AI Agent & RAG (10 min)                                │
+│ ├─ Document Processing (2 min)       ← PDF chunking/embedding   │
+│ ├─ Question Preparation (2 min)      ← Prepare demo questions   │
+│ ├─ AI Agent Demo (4 min)             ← Batch + Real-time + PDF  │
+│ └─ Complex Queries (2 min)           ← Combined multi-source    │
+├─────────────────────────────────────────────────────────────────┤
+│ Phase 4: Advanced Features & Q&A (10 min)                       │
+│ ├─ Extra Features Demo (5 min)       ← Macros, tests, prompts   │
+│ └─ Q&A Session (5 min)               ← Answer trainer questions │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Pre-Demo Checklist (30 min before)
 
-### 1. Start Services
+### 1. Environment Setup
 
 ```bash
 # Navigate to project
@@ -20,22 +52,8 @@ cd /Users/lehongthai/code_personal/fa-c002-lab
 cd kafka && docker-compose up -d
 cd ..
 
-# Start Airflow
-cd airflow && docker-compose up -d
-cd ..
-
-# Verify all healthy
-docker ps --format "table {{.Names}}\t{{.Status}}"
-```
-
-Expected output:
-```
-NAMES               STATUS
-capstone-kafka      Up X minutes (healthy)
-capstone-postgres   Up X minutes (healthy)
-airflow-webserver   Up X minutes (healthy)
-airflow-scheduler   Up X minutes
-airflow-postgres    Up X minutes (healthy)
+# Verify Kafka healthy
+docker ps --format "table {{.Names}}\t{{.Status}}" | grep capstone
 ```
 
 ### 2. Generate Fresh Streaming Data
@@ -44,14 +62,14 @@ airflow-postgres    Up X minutes (healthy)
 # Generate 30 alerts quickly
 uv run python kafka/producer.py --batch 30 --interval 0
 
-# Consume to PostgreSQL
+# Consume to PostgreSQL (new consumer group for fresh data)
 uv run python -c "
 from kafka import KafkaConsumer
 import psycopg2, json
 conn = psycopg2.connect(host='localhost', port=5433, database='streaming', user='capstone', password='capstone123')
 consumer = KafkaConsumer('alerts', bootstrap_servers='localhost:29092',
     value_deserializer=lambda x: json.loads(x.decode('utf-8')),
-    auto_offset_reset='latest', group_id='demo-consumer', consumer_timeout_ms=15000)
+    auto_offset_reset='latest', group_id='demo-$(date +%s)', consumer_timeout_ms=15000)
 count = 0
 for msg in consumer:
     cur = conn.cursor()
@@ -63,168 +81,233 @@ print(f'Consumed {count} alerts')
 "
 ```
 
-### 3. Verify Data
+### 3. Prepare Browser Tabs
 
-```bash
-# Check streaming alerts count
-uv run python -c "
-import psycopg2
-conn = psycopg2.connect(host='localhost', port=5433, database='streaming', user='capstone', password='capstone123')
-cur = conn.cursor()
-cur.execute('SELECT COUNT(*), MAX(created_at) FROM alerts')
-count, latest = cur.fetchone()
-print(f'Alerts: {count} | Latest: {latest}')
-cur.execute('SELECT severity, COUNT(*) FROM alerts GROUP BY severity')
-for row in cur.fetchall(): print(f'  {row[0]}: {row[1]}')
-"
-
-# Check Snowflake data (via agent)
-uv run python -m agent.agent -q "How many rows in the fact table?"
-```
-
-### 4. Open Browser Tabs
-
+- [ ] GitHub Actions page (ready to trigger CI)
 - [ ] Airflow UI: http://localhost:8080 (admin/admin)
-- [ ] Terminal for agent queries
-- [ ] Terminal for Kafka producer (live streaming)
+- [ ] Terminal 1: Kafka producer
+- [ ] Terminal 2: Agent queries
+
+### 4. Prepare CLI Commands
+
+Store these in terminal history:
+```bash
+# CI trigger (if manual)
+# Kafka commands
+uv run python kafka/producer.py
+# Agent queries
+uv run python -m agent.agent -q "What's total revenue this week?"
+uv run python -m agent.agent -q "Show me critical alerts"
+uv run python -m agent.agent -q "What are the business rules for ROAS?"
+```
 
 ---
 
-## Demo Script (30 minutes)
+## Phase 1: Real-time Pipeline (5 min)
 
-### Part 1: Real-Time Pipeline (5 min)
+### Step 1.1: CI/CD Initiation (1 min)
 
-**Story:** "First, let me show you our real-time monitoring system."
+**Action:** Start CI job FIRST (it runs in background)
 
-#### 1.1 Show Kafka Architecture
-```
-"We have a streaming pipeline that monitors app performance in real-time:
-Producer → Kafka → Consumer → PostgreSQL → Agent queries"
-```
-
-#### 1.2 Start Live Producer
 ```bash
-# In visible terminal
+# Option A: Manual trigger on GitHub Actions page
+# Option B: Push a small commit
+git commit --allow-empty -m "trigger ci" && git push
+```
+
+**Say:** "Let me start our CI/CD pipeline - it will run in the background while we demo other components."
+
+### Step 1.2: Real-time Data Flow (3 min)
+
+**Action:** Show Kafka streaming
+
+```bash
+# Terminal 1: Start producer
 uv run python kafka/producer.py
 ```
 
-**Show:** Alerts appearing every 10 seconds with severity colors.
+**Show:** Alerts appearing every 10 seconds with severity colors (🔴🟡🔵)
 
-#### 1.3 Query via Agent
+**Say:** "Our streaming pipeline generates real-time alerts - spend spikes, ROAS drops, etc. These flow through Kafka to PostgreSQL."
+
+**Action:** Query via agent
 ```bash
-uv run python -m agent.agent -q "Show me any critical alerts"
+uv run python -m agent.agent -q "Show me recent critical alerts"
 ```
 
-**Talking Point:**
-> "The agent can query real-time alerts. Notice how it returns the most recent critical events - spend spikes, ROAS drops, etc."
+**Say:** "The agent can query this real-time data. Notice the timestamps - this data landed just moments ago."
+
+### Step 1.3: CI/CD Results (1 min)
+
+**Action:** Return to GitHub Actions page
+
+**Show:** CI pipeline results - SQLFluff lint + dbt test
+
+**Say:** "Our CI runs 2 automated checks: SQL linting with SQLFluff and data quality tests with dbt."
 
 ---
 
-### Part 2: Batch Pipeline - Airflow (5 min)
+## Phase 2: Batch Pipeline (5 min)
 
-**Story:** "Now let's look at our batch data pipeline orchestrated by Airflow."
+### Step 2.1: Airflow Setup (2 min)
 
-#### 2.1 Show Airflow DAG
-- Open http://localhost:8080
-- Navigate to `capstone_dbt_pipeline` DAG
-- Show the 3 tasks: `dbt_debug` → `dbt_run` → `dbt_test`
+**Action:** Start Airflow (if not running)
+```bash
+cd airflow && docker-compose up -d
+```
 
-**Talking Point:**
-> "Our dbt transformations run daily at 2 AM. The pipeline has 3 tasks: verify connection, build models, run tests."
+**Action:** Open Airflow UI http://localhost:8080
 
-#### 2.2 Trigger DAG (Optional)
-- Click "Trigger DAG" button
-- Show tasks executing in sequence
+**Show:** DAG list, navigate to `capstone_dbt_pipeline`
 
-**Talking Point:**
-> "Each task depends on the previous one. If debug fails, we don't waste time running models."
+**Say:** "Airflow orchestrates our batch pipeline. This DAG runs daily at 2 AM."
+
+### Step 2.2: Data Processing (2 min)
+
+**Action:** Show DAG structure - 3 tasks
+
+**Say:** "We have 3 tasks: debug verifies Snowflake connection, run builds all dbt models, test runs data quality checks."
+
+**Action:** Trigger DAG (or show recent successful run)
+
+**While waiting, show dbt structure:**
+```bash
+ls my_dbt_project/models/
+# 01_staging, 02_intermediate, 03_mart
+```
+
+**Say:** "Our dbt project follows a 3-layer architecture: staging cleans raw data, intermediate joins sources, mart produces analytics tables."
+
+### Step 2.3: Results Review (1 min)
+
+**Show:** Airflow task completion (green)
+
+**Say:** "All tasks completed successfully. The data is now transformed and ready for the AI agent."
 
 ---
 
-### Part 3: AI Agent - Core Queries (10 min)
+## Phase 3: AI Agent & RAG (10 min)
 
-**Story:** "This is the main value - Chi Linh can ask questions in plain English."
+### Step 3.1: RAG Pipeline Explanation (3 min)
 
-#### 3.1 Revenue Analysis
+**Run the RAG demo script:**
+```bash
+uv run python agent/rag_demo.py
+```
+
+This walks through each step interactively. Press Enter between steps.
+
+**Talking Points for Each Step:**
+
+#### Step 1: Load Document
+**Say:** "First we load our business rules document. This contains ROAS thresholds, CPI benchmarks, and decision frameworks that Chi Linh uses."
+
+#### Step 2: Chunking
+**Say:** "The document is too long for the LLM context. We split it into ~500 character chunks. Notice we split on headers and paragraphs to keep related content together. Overlap of 50 characters ensures we don't lose context at boundaries."
+
+```
+Original: 3000 words → 12 chunks of ~500 chars each
+```
+
+#### Step 3: Embedding
+**Say:** "Each chunk is converted to a vector - a list of 1536 numbers. This is done by OpenAI's embedding model. Similar text produces similar vectors. 'ROAS thresholds' and 'What is ROAS?' will have vectors that are close together."
+
+```
+"ROAS > 100% is profitable" → [0.12, -0.45, 0.78, ...]
+```
+
+#### Step 4: Similarity Search
+**Say:** "When the user asks a question, we embed that question too, then find the chunks with the most similar vectors. This is semantic search - it understands meaning, not just keywords."
+
+```
+Query: "What should I do if ROAS drops?"
+→ Finds chunks about ROAS thresholds and scaling decisions
+```
+
+**Quick visual:**
+```
+┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
+│ Document │────▶│ Chunking │────▶│ Embedding│────▶│  Vector  │
+│          │     │ (split)  │     │ (OpenAI) │     │  Store   │
+└──────────┘     └──────────┘     └──────────┘     └──────────┘
+                                                        │
+Query ─────────────────────────────────────────────────▶│
+                                                        ▼
+                                                 Top K chunks
+
+### Step 3.2: AI Agent Demo - Three Tools (5 min)
+
+**Tool 1: Snowflake (Batch Data)**
 ```bash
 uv run python -m agent.agent -q "What's our total ad revenue this week?"
 ```
+**Say:** "The agent uses query_snowflake to get historical data from our data warehouse."
 
-**Talking Point:**
-> "The agent translates natural language to SQL and queries our Snowflake data warehouse."
-
-#### 3.2 App Performance
+**Tool 2: Kafka (Real-time Alerts)**
 ```bash
-uv run python -m agent.agent -q "Which apps have the highest D0 ROAS?"
+uv run python -m agent.agent -q "Show me any critical alerts"
+```
+**Say:** "The agent uses query_realtime_alerts to check the streaming pipeline."
+
+**Tool 3: RAG (Business Rules)**
+```bash
+uv run python -m agent.agent -q "What are our ROAS thresholds for scaling decisions?"
+```
+**Say:** "The agent uses search_business_documents to find relevant business rules. This is the RAG tool we just explained."
+
+**Combined Query (Multiple Tools):**
+```bash
+uv run python -m agent.agent -q "Which apps have D0 ROAS below 80% and what should we do about them?"
+```
+**Say:** "The agent combines warehouse data with business rules to provide actionable recommendations."
+
+### Step 3.3: Conversation Memory (2 min)
+
+**Action:** Show multi-turn conversation
+```bash
+uv run python -m agent.agent --interactive
+# You: What's our top app by revenue?
+# Agent: [answers]
+# You: What's its D0 ROAS?
+# Agent: [uses context from previous answer]
 ```
 
-#### 3.3 Trend Analysis
-```bash
-uv run python -m agent.agent -q "Compare last week's revenue to this week"
-```
-
-#### 3.4 Drill Down
-```bash
-uv run python -m agent.agent -q "Break down revenue by country for our top app"
-```
-
-**Talking Point:**
-> "Notice the agent understands business context - D0 ROAS, LTV metrics, attribution data."
-
-#### 3.5 Combined Query (Batch + Streaming)
-```bash
-uv run python -m agent.agent -q "What's our top performing app and are there any alerts for it?"
-```
-
-**Talking Point:**
-> "The agent can combine batch analytics with real-time alerts in a single response."
+**Say:** "The agent maintains conversation memory - it remembers we were talking about that specific app."
 
 ---
 
-### Part 4: Extra Features (5 min)
+## Phase 4: Advanced Features & Q&A (10 min)
 
-#### 4.1 dbt Macros
+### Extra Features Demo (5 min)
+
+#### dbt Macros
 ```bash
-cd my_dbt_project
-cat macros/calculate_ctr.sql
+cat my_dbt_project/macros/calculate_ctr.sql
 ```
+**Say:** "Custom macros ensure consistent metric calculations across all models."
 
-**Talking Point:**
-> "We use custom macros for consistent metric calculations across all models."
-
-#### 4.2 Data Quality
+#### Data Quality Tests
 ```bash
-dbt test --select fct_app_daily_performance
+cd my_dbt_project && dbt test --select fct_app_daily_performance
 ```
+**Say:** "Automated tests catch data issues before they reach the agent."
 
-**Talking Point:**
-> "Automated tests ensure data quality - null checks, range validations, freshness."
-
-#### 4.3 Business Context Prompts
+#### Business Context Prompts
 ```bash
-cat agent/prompts.py | head -50
+head -60 agent/prompts.py
 ```
+**Say:** "The system prompt includes Ameno's specific thresholds and decision frameworks."
 
-**Talking Point:**
-> "The system prompt includes Ameno's specific thresholds and business rules."
+### Q&A Session (5 min)
 
----
+**Prepared answers:**
 
-### Part 5: Q&A (5 min)
-
-**Prepared answers for common questions:**
-
-**Q: How does the agent know which tool to use?**
-> "LangGraph's tool binding lets the LLM see all available tools and their descriptions. It decides based on the question context."
-
-**Q: Is the data real?**
-> "Batch data is real - actual AdMob and Adjust data from our apps. Streaming alerts are simulated for demo purposes."
-
-**Q: How long to add a new metric?**
-> "Add a dbt macro, update the fact table, update the agent prompt - usually under an hour."
-
-**Q: What about data freshness?**
-> "Batch data is T-1 (yesterday). Streaming alerts are real-time with ~1 minute latency."
+| Question | Answer |
+|----------|--------|
+| How does agent choose tools? | LangGraph tool binding - LLM sees tool descriptions and decides |
+| Is data real? | Batch = real AdMob/Adjust. Streaming = simulated alerts |
+| Data freshness? | Batch = T-1. Streaming = real-time (~1 min latency) |
+| Add new metric? | dbt macro + fact table update + prompt update (~1 hour) |
 
 ---
 

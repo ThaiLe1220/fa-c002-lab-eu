@@ -2,13 +2,18 @@
 
 How the AI Agent works, from high level to low level.
 
+**Status:** COMPLETE - All 3 tools implemented
+
 ---
 
 ## Part 1: High Level - What It Does
 
 ### Purpose
 
-The agent answers business questions about mobile app performance by querying Snowflake data.
+The agent answers business questions by querying three data sources:
+1. **Snowflake** - Historical batch data (revenue, costs, metrics)
+2. **PostgreSQL** - Real-time streaming alerts
+3. **FAISS** - Business rules and documentation
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -21,8 +26,8 @@ The agent answers business questions about mobile app performance by querying Sn
 │                      AI AGENT                                │
 │                                                              │
 │   1. Understands the question                                │
-│   2. Generates SQL query                                     │
-│   3. Executes query on Snowflake                            │
+│   2. Chooses appropriate tool(s)                            │
+│   3. Executes query on data source                          │
 │   4. Interprets results with business context               │
 │   5. Returns actionable answer                               │
 └─────────────────────────────────────────────────────────────┘
@@ -31,28 +36,37 @@ The agent answers business questions about mobile app performance by querying Sn
 ┌─────────────────────────────────────────────────────────────┐
 │                        ANSWER                                │
 │  "ai.video.template.videogenerator has D0 ROAS of 2.86%     │
-│   (losing money). Recommend pausing ad spend."               │
+│   (losing money). Based on business rules, recommend        │
+│   pausing ad spend immediately."                            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Three Tools
+
+| Tool | Data Source | Use Case |
+|------|-------------|----------|
+| `query_snowflake` | Snowflake | Revenue, costs, metrics, historical data |
+| `query_realtime_alerts` | PostgreSQL | Real-time alerts from Kafka pipeline |
+| `search_business_documents` | FAISS | Business rules, thresholds, guidelines |
+
 ### Key Capabilities
 
-| Capability | Example |
-|------------|---------|
-| Query data | "What's total revenue?" |
-| Calculate metrics | "What's our D0 ROAS?" |
-| Compare periods | "Compare this week vs last week" |
-| Drill down | "Which app? Which country?" |
-| Recommend actions | "Should I turn off this app?" |
-| Remember context | "What about its CPI?" (follows up) |
+| Capability | Example | Tool Used |
+|------------|---------|-----------|
+| Query data | "What's total revenue?" | Snowflake |
+| Calculate metrics | "What's our D0 ROAS?" | Snowflake |
+| Check alerts | "Show me critical alerts" | Kafka |
+| Find rules | "What's the ROAS threshold?" | RAG |
+| Combined query | "Which apps violate our rules?" | All 3 |
+| Remember context | "What about its CPI?" | Memory |
 
 ### Business Context
 
 The agent knows:
 - **Metric definitions**: ROAS, CPI, eCPM, IMPDAU, LTV
-- **Thresholds**: ROAS < 80% = losing money
+- **Thresholds**: ROAS < 80% = losing money (from RAG)
 - **Data structure**: 59 apps, 240 countries, 29 days of data
-- **User**: Chi Linh (Business Controller) who sets targets and tracks profitability
+- **User**: Chi Linh (Business Controller) who sets targets
 
 ---
 
@@ -64,12 +78,7 @@ The agent knows:
 ┌─────────────────────────────────────────────────────────────┐
 │                     STREAMLIT UI                             │
 │                     (agent/app.py)                           │
-│                                                              │
-│   - Chat interface                                           │
-│   - Message history                                          │
-│   - Quick question buttons                                   │
 └─────────────────────────────────────────────────────────────┘
-                              │
                               │ calls chat()
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -82,7 +91,6 @@ The agent knows:
 │                       └─────────────┘     └─────────────┘  │
 │                              │                   │          │
 │                              │◀──────────────────┘          │
-│                              │                              │
 │                              ▼                              │
 │                       ┌─────────────┐                       │
 │                       │     END     │                       │
@@ -90,7 +98,6 @@ The agent knows:
 │                                                              │
 │   + Memory (conversation history per thread)                 │
 └─────────────────────────────────────────────────────────────┘
-                              │
                               │ uses
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -98,36 +105,22 @@ The agent knows:
 │                   (agent/prompts.py)                         │
 │                                                              │
 │   - Role: "You are a data analyst for Ameno Technologies"   │
-│   - Schema: Tables, columns, relationships                   │
-│   - Metrics: ROAS, CPI, eCPM formulas                       │
+│   - 3 tools explained with when to use each                 │
 │   - Thresholds: ROAS < 80% = losing money                   │
-│   - Guidelines: Format numbers, suggest actions              │
 └─────────────────────────────────────────────────────────────┘
-                              │
                               │ calls
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   SNOWFLAKE TOOL                             │
-│            (agent/tools/snowflake_tools.py)                  │
+│                      THREE TOOLS                             │
+├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│   @tool                                                      │
-│   def query_snowflake(sql_query: str) -> str:               │
-│       # Connect to Snowflake                                 │
-│       # Execute SQL                                          │
-│       # Return formatted results                             │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │
+│  │ query_snowflake │  │ query_realtime  │  │ search_     │ │
+│  │                 │  │ _alerts         │  │ business_   │ │
+│  │ Snowflake       │  │ PostgreSQL      │  │ documents   │ │
+│  │ (batch data)    │  │ (streaming)     │  │ (FAISS)     │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────┘ │
 │                                                              │
-│   Uses: scripts/utils/snowflake_client.py                   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              │ queries
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      SNOWFLAKE                               │
-│                   DB_T34.ANALYTICS                           │
-│                                                              │
-│   - fct_app_daily_performance (140K rows)                   │
-│   - dim_apps (59 apps)                                       │
-│   - dim_dates (29 days)                                      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -137,12 +130,16 @@ The agent knows:
 agent/
 ├── __init__.py              # Package marker
 ├── config.py                # OpenAI API key, model settings
-├── prompts.py               # System prompt with business context
+├── prompts.py               # System prompt with 3-tool guidance
 ├── agent.py                 # LangGraph state machine + chat()
 ├── app.py                   # Streamlit UI
+├── rag_demo.py              # Interactive RAG explanation
+├── vector_store/            # FAISS index (auto-generated)
 └── tools/
     ├── __init__.py
-    └── snowflake_tools.py   # query_snowflake() tool
+    ├── snowflake_tools.py   # query_snowflake() - batch data
+    ├── kafka_tools.py       # query_realtime_alerts() - streaming
+    └── rag_tools.py         # search_business_documents() - RAG
 ```
 
 ### Data Flow
@@ -150,8 +147,8 @@ agent/
 1. **User types question** in Streamlit UI
 2. **UI calls `chat(message, thread_id)`** in agent.py
 3. **Agent invokes LLM** with system prompt + conversation history
-4. **LLM decides** to call `query_snowflake` tool with generated SQL
-5. **Tool executes SQL** on Snowflake, returns results
+4. **LLM decides** which tool(s) to call based on question
+5. **Tool executes** query on appropriate data source
 6. **LLM interprets results** with business context
 7. **Agent returns response** to UI
 8. **UI displays response** to user
@@ -163,37 +160,44 @@ agent/
 ### 3.1 Configuration (agent/config.py)
 
 ```python
-# Load API key from .secret/.env
+# Load API key from .env
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_TEMPERATURE = 0  # Deterministic responses
 ```
 
-**Key points:**
-- Uses gpt-4o-mini (cheap, fast, good enough)
-- Temperature 0 for consistent SQL generation
-- API key loaded from `.secret/.env`
+### 3.2 Three Tools
 
-### 3.2 Snowflake Tool (agent/tools/snowflake_tools.py)
-
+**Snowflake Tool (batch data):**
 ```python
 @tool
 def query_snowflake(sql_query: str) -> str:
-    """
-    Execute a SQL query against Snowflake analytics tables.
-
-    [Docstring includes schema info for LLM to understand]
-    """
+    """Execute SQL on Snowflake analytics tables."""
     client = get_snowflake_client(schema="ANALYTICS")
     df = client.execute_query(sql_query)
     return df.to_string(index=False)
 ```
 
-**Key points:**
-- `@tool` decorator makes it callable by LangGraph
-- Docstring is crucial - LLM reads it to understand how to use the tool
-- Returns formatted string (not DataFrame) for LLM to interpret
-- Uses existing `snowflake_client.py` for connection
+**Kafka Tool (streaming alerts):**
+```python
+@tool
+def query_realtime_alerts(severity: str = "all", limit: int = 10) -> str:
+    """Query real-time alerts from streaming pipeline."""
+    conn = get_streaming_db()  # PostgreSQL port 5433
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM alerts ORDER BY created_at DESC LIMIT %s", (limit,))
+    return format_alerts(cur.fetchall())
+```
+
+**RAG Tool (business documents):**
+```python
+@tool
+def search_business_documents(query: str, num_results: int = 3) -> str:
+    """Search business rules and documentation."""
+    vector_store = get_vector_store()  # FAISS with OpenAI embeddings
+    results = vector_store.similarity_search(query, k=num_results)
+    return format_results(results)
+```
 
 ### 3.3 System Prompt (agent/prompts.py)
 
@@ -201,122 +205,50 @@ def query_snowflake(sql_query: str) -> str:
 SYSTEM_PROMPT = """
 You are a data analyst assistant for Ameno Technologies...
 
-## Your Role
-- Answer questions about app revenue, costs, and profitability
-- Calculate business metrics (ROAS, CPI, eCPM, etc.)
+## Three Tools for Three Systems
 
-## Data Context
-- Date range: Dec 25, 2025 to Jan 22, 2026
-- Apps: 59 apps
-- Tables: fct_app_daily_performance, dim_apps, dim_dates
+1. **query_snowflake** - For batch analytics data
+   - Use for: "What's our revenue?", "Show me top apps"
 
-## Key Metrics
-- d0_roas = ad_revenue_d0 / network_cost
-- cpi = network_cost / installs
+2. **query_realtime_alerts** - For streaming alerts
+   - Use for: "Any alerts?", "Show critical alerts"
 
-## Thresholds
-- D0 ROAS > 100%: Profitable
-- D0 ROAS < 80%: Losing money, needs action
+3. **search_business_documents** - For business rules
+   - Use for: "What's the threshold for X?"
+
+## How to Work
+1. Determine which tool(s) you need
+2. For data questions: use query_snowflake
+3. For alert questions: use query_realtime_alerts
+4. For policy/rule questions: use search_business_documents
+5. For combined questions: use multiple tools
 """
 ```
-
-**Key points:**
-- Tells LLM its role and capabilities
-- Provides schema context so LLM can write correct SQL
-- Includes metric formulas for calculations
-- Includes business thresholds for interpretation
 
 ### 3.4 LangGraph Agent (agent/agent.py)
 
 ```python
-# 1. Create LLM with tools
+# 1. Create LLM with all 3 tools
 llm = ChatOpenAI(api_key=OPENAI_API_KEY, model=OPENAI_MODEL)
-tools = [query_snowflake]
+tools = [query_snowflake, query_realtime_alerts, search_business_documents]
 llm_with_tools = llm.bind_tools(tools)
 
 # 2. Define state (conversation history)
 class AgentState(MessagesState):
     pass
 
-# 3. Define agent node (calls LLM)
-def call_model(state: AgentState):
-    messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
-    response = llm_with_tools.invoke(messages)
-    return {"messages": [response]}
-
-# 4. Define routing (continue to tools or end?)
-def should_continue(state: AgentState):
-    if state["messages"][-1].tool_calls:
-        return "tools"  # LLM wants to call a tool
-    return "__end__"    # LLM is done, return response
-
-# 5. Build graph
+# 3. Build graph
 graph = StateGraph(AgentState)
 graph.add_node("agent", call_model)
 graph.add_node("tools", ToolNode(tools))
 graph.add_edge(START, "agent")
 graph.add_conditional_edges("agent", should_continue)
-graph.add_edge("tools", "agent")  # After tool, go back to agent
+graph.add_edge("tools", "agent")
 
-# 6. Compile with memory
+# 4. Compile with memory
 memory = MemorySaver()
 agent = graph.compile(checkpointer=memory)
 ```
-
-**Key points:**
-- `MessagesState` tracks conversation history
-- `should_continue` decides: call tool or return answer
-- Loop: agent → tools → agent (until done)
-- `MemorySaver` enables conversation memory across calls
-
-### 3.5 Chat Function (agent/agent.py)
-
-```python
-def chat(message: str, thread_id: str = "default") -> str:
-    """Send message, get response. Thread ID enables memory."""
-    config = {"configurable": {"thread_id": thread_id}}
-
-    result = agent.invoke(
-        {"messages": [HumanMessage(content=message)]},
-        config=config
-    )
-
-    return result["messages"][-1].content
-```
-
-**Key points:**
-- `thread_id` groups conversations (same thread = shared memory)
-- Returns just the final response content
-
-### 3.6 Streamlit UI (agent/app.py)
-
-```python
-# Initialize session state for chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Display chat history
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# Handle user input
-if prompt := st.chat_input("Ask about app performance..."):
-    # Add user message to history
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
-    # Get agent response
-    response = chat(prompt, st.session_state.thread_id)
-
-    # Add agent response to history
-    st.session_state.messages.append({"role": "assistant", "content": response})
-```
-
-**Key points:**
-- `st.session_state` persists data across reruns
-- `st.chat_message` displays messages with proper styling
-- `st.chat_input` provides the input box
-- Calls `chat()` from agent.py
 
 ---
 
@@ -325,103 +257,89 @@ if prompt := st.chat_input("Ask about app performance..."):
 ### Prerequisites
 
 ```bash
-# 1. OpenAI API key in .secret/.env
+# 1. OpenAI API key in .env
 OPENAI_API_KEY=sk-your-key-here
 
 # 2. Snowflake RSA key at ~/.snowflake/keys/rsa_key.p8
+
+# 3. Kafka + PostgreSQL running (for streaming alerts)
+cd kafka && docker-compose up -d
 ```
 
 ### Commands
 
 ```bash
-# Activate environment
-cd /Users/lehongthai/code_personal/fa-c002-lab
-source .venv/bin/activate
-
-# Option 1: CLI mode (for testing)
+# Option 1: CLI mode
 uv run python -m agent.agent --interactive
 
 # Option 2: Single query
-uv run python -m agent.agent --query "What's our ROAS?"
+uv run python -m agent.agent -q "What's our ROAS?"
 
-# Option 3: Streamlit UI (for demo)
+# Option 3: Streamlit UI
 uv run streamlit run agent/app.py
+
+# Option 4: RAG demo (explains chunking + embedding)
+uv run python agent/rag_demo.py
 ```
 
 ### Example Session
 
 ```
-You: What's our total revenue?
+You: What's our total revenue this week?
+Agent: [Uses query_snowflake]
+       Total Revenue: $251,878.48
+       D0 ROAS: 74.99% (losing money)
 
-Agent:
-1. **Total Revenue:** $251,878.48
-2. **Total Cost:** $245,940.12
-3. **D0 ROAS:** 74.99% (losing money)
+You: Are there any alerts I should know about?
+Agent: [Uses query_realtime_alerts]
+       3 critical alerts in the last hour:
+       🔴 ROAS_DROP - Thailand region below threshold
 
-Insight: ROAS below 80% indicates we're losing money on user acquisition.
-
-You: Which apps are causing this?
-
-Agent:
-Apps with D0 ROAS < 80%:
-| App Name | Cost | D0 ROAS |
-|----------|------|---------|
-| ai.video.template.videogenerator | $418 | 2.86% |
-| Video AI Generator | $59,718 | 67.56% |
-...
-
-Recommendation: Consider pausing ad spend on worst performers.
+You: What should I do about the Thailand issue?
+Agent: [Uses search_business_documents + query_snowflake]
+       Based on business rules, ROAS below 60% requires
+       immediate action. Thailand D0 ROAS is 61.7%.
+       Recommend reducing spend by 30%.
 ```
 
 ---
 
-## Part 5: How It Handles Different Questions
+## Part 5: RAG Implementation Details
 
-### Simple Query
+### How RAG Works
+
 ```
-User: "How many apps do we have?"
-
-Agent thinking:
-1. Need to count distinct apps
-2. Generate SQL: SELECT COUNT(DISTINCT app_key) FROM dim_apps
-3. Execute → 59
-4. Answer: "We have 59 apps."
-```
-
-### Calculation Query
-```
-User: "What's our D0 ROAS?"
-
-Agent thinking:
-1. ROAS = revenue / cost
-2. Generate SQL: SELECT SUM(ad_revenue_d0) / NULLIF(SUM(network_cost), 0)
-3. Execute → 0.7499
-4. Interpret: 74.99% is below 80% threshold
-5. Answer: "D0 ROAS is 74.99% (losing money)"
+Document → Chunking → Embedding → FAISS Vector Store
+                                        ↑
+Query → Embed Query → Similarity Search─┘
+                                        ↓
+                                 Top K Chunks → LLM → Answer
 ```
 
-### Follow-up Query (uses memory)
-```
-User: "What about for Thailand specifically?"
+### Components
 
-Agent thinking:
-1. Previous question was about ROAS
-2. Now filter by country_code = 'TH'
-3. Generate SQL with WHERE country_code = 'TH'
-4. Execute → 0.617
-5. Answer: "Thailand D0 ROAS is 61.7% (also losing money)"
+| Component | Location | Description |
+|-----------|----------|-------------|
+| Business Rules | `docs/business_rules/ameno_business_rules.md` | ROAS thresholds, CPI benchmarks |
+| Vector Store | `agent/vector_store/` | FAISS index (auto-generated) |
+| RAG Tool | `agent/tools/rag_tools.py` | search_business_documents() |
+| Demo Script | `agent/rag_demo.py` | Interactive explanation |
+
+### Chunking Settings
+
+```python
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,       # ~500 characters per chunk
+    chunk_overlap=50,     # 50 char overlap
+    separators=["\n---\n", "\n## ", "\n### ", "\n\n", "\n", " "]
+)
 ```
 
-### Comparison Query
-```
-User: "Compare this week vs last week"
+### Embedding
 
-Agent thinking:
-1. Need two date ranges
-2. Generate SQL with CTEs for each period
-3. Execute → revenue up 70%, ROAS up 9 points
-4. Answer with change analysis
-```
+- Model: OpenAI `text-embedding-ada-002`
+- Dimensions: 1536
+- Similar text → Similar vectors (proven with cosine similarity)
 
 ---
 
@@ -429,26 +347,26 @@ Agent thinking:
 
 ### "OPENAI_API_KEY not found"
 ```bash
-# Check .secret/.env exists and has key
-cat .secret/.env | grep OPENAI
+cat .env | grep OPENAI
 ```
 
 ### "Snowflake connection failed"
 ```bash
-# Check RSA key exists
 ls ~/.snowflake/keys/rsa_key.p8
-
-# Test connection
 uv run python -c "from scripts.utils.snowflake_client import get_snowflake_client; c = get_snowflake_client(); c.connect(); print('OK')"
 ```
 
-### "Agent gives wrong SQL"
-- Check `agent/prompts.py` has correct schema
-- Check `agent/tools/snowflake_tools.py` docstring matches actual tables
+### "Cannot connect to streaming database"
+```bash
+cd kafka && docker-compose up -d
+docker ps | grep capstone
+```
 
-### "Slow responses"
-- Normal: 3-8 seconds (Snowflake query + LLM)
-- If >15s: Check Snowflake warehouse is running
+### "No business documents found"
+```bash
+ls docs/business_rules/
+# Should show ameno_business_rules.md
+```
 
 ---
 
@@ -458,10 +376,12 @@ uv run python -c "from scripts.utils.snowflake_client import get_snowflake_clien
 |------|---------|--------------|
 | `agent/config.py` | Settings | Load API keys |
 | `agent/prompts.py` | Business context | SYSTEM_PROMPT |
-| `agent/tools/snowflake_tools.py` | Data access | query_snowflake() |
+| `agent/tools/snowflake_tools.py` | Batch data | query_snowflake() |
+| `agent/tools/kafka_tools.py` | Streaming | query_realtime_alerts() |
+| `agent/tools/rag_tools.py` | Documents | search_business_documents() |
 | `agent/agent.py` | Core logic | chat(), create_agent() |
 | `agent/app.py` | UI | Streamlit interface |
-| `scripts/utils/snowflake_client.py` | DB connection | SnowflakeClient |
+| `agent/rag_demo.py` | Demo | Interactive RAG explanation |
 
 ---
 
@@ -469,4 +389,5 @@ uv run python -c "from scripts.utils.snowflake_client import get_snowflake_clien
 
 | Date | Change |
 |------|--------|
+| 2026-01-24 | Updated for all 3 tools (Snowflake, Kafka, RAG) |
 | 2026-01-24 | Initial creation |

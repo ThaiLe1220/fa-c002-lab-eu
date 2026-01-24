@@ -4,7 +4,7 @@ Comprehensive implementation guide for the AI Agent phase.
 
 **Start Date:** 2026-01-23
 **Demo Date:** 2026-01-24, 1:00 PM
-**Status:** CORE COMPLETE (Snowflake Tool + Agent + UI verified)
+**Status:** COMPLETE (All 3 tools: Snowflake + Kafka + RAG)
 
 ---
 
@@ -50,14 +50,14 @@ Build an AI chatbot that queries Snowflake data to answer Chi Linh's business qu
 | System Prompt | Metric definitions, Chi Linh's thresholds | - |
 | Streamlit UI | Chat interface for demo | - |
 
-### 1.2 Nice to Have (Checkboxes)
+### 1.2 Additional Tools (Checkboxes) - COMPLETE
 
-| Component | Description | Points |
-|-----------|-------------|--------|
-| Kafka Tool | Query fake streaming data | 5 |
-| RAG Tool | Search PDF documents | 5 |
-| Compare Tool | Compare two time periods | Extra |
-| Drill-down Tool | Breakdown by dimension | Extra |
+| Component | Description | Points | Status |
+|-----------|-------------|--------|--------|
+| Kafka Tool | Query streaming alerts from PostgreSQL | 5 | DONE |
+| RAG Tool | Search business rules via FAISS | 5 | DONE |
+| Compare Tool | Compare two time periods | Extra | Not needed |
+| Drill-down Tool | Breakdown by dimension | Extra | Not needed |
 
 ### 1.3 Out of Scope
 
@@ -70,20 +70,22 @@ Build an AI chatbot that queries Snowflake data to answer Chi Linh's business qu
 
 ## Part 2: Technical Architecture
 
-### 2.1 File Structure
+### 2.1 File Structure - IMPLEMENTED
 
 ```
 agent/
 ├── __init__.py
-├── config.py                 # Environment config, constants
-├── agent.py                  # LangGraph state graph
-├── prompts.py                # System prompt with business context
+├── config.py                 # Environment config, loads from .env
+├── agent.py                  # LangGraph state graph with 3 tools
+├── prompts.py                # System prompt with 3-tool guidance
 ├── app.py                    # Streamlit UI
+├── rag_demo.py               # Interactive RAG explanation demo
+├── vector_store/             # FAISS index (auto-generated)
 └── tools/
     ├── __init__.py
-    ├── snowflake_tools.py    # Core: query fact table
-    ├── kafka_tools.py        # Optional: streaming data
-    └── rag_tools.py          # Optional: document search
+    ├── snowflake_tools.py    # query_snowflake - batch data
+    ├── kafka_tools.py        # query_realtime_alerts - streaming
+    └── rag_tools.py          # search_business_documents - RAG
 ```
 
 ### 2.2 Dependencies
@@ -264,19 +266,21 @@ uv run python -m agent.agent --interactive
 uv run streamlit run agent/app.py
 ```
 
-### Phase 4.4: Optional Checkboxes - PENDING
+### Phase 4.4: Optional Checkboxes - COMPLETE
 
-**Kafka Tool (if time permits):**
-- [ ] Create `kafka/docker-compose.yml`
-- [ ] Create `kafka/producer.py` with fake metrics
-- [ ] Create `agent/tools/kafka_tools.py`
-- [ ] Add to agent tools
+**Kafka Tool - DONE:**
+- [x] Create `kafka/docker-compose.yml` (Kafka KRaft + PostgreSQL)
+- [x] Create `kafka/producer.py` with fake alerts (--batch mode)
+- [x] Create `kafka/consumer.py` to write to PostgreSQL
+- [x] Create `agent/tools/kafka_tools.py` (query_realtime_alerts)
+- [x] Add to agent tools
 
-**RAG Tool (if time permits):**
-- [ ] Add sample PDF (e.g., metric definitions)
-- [ ] Create simple vector store
-- [ ] Create `agent/tools/rag_tools.py`
-- [ ] Add to agent tools
+**RAG Tool - DONE:**
+- [x] Create `docs/business_rules/ameno_business_rules.md` (ROAS thresholds, CPI benchmarks)
+- [x] Create FAISS vector store with OpenAI embeddings
+- [x] Create `agent/tools/rag_tools.py` (search_business_documents)
+- [x] Create `agent/rag_demo.py` for demo explanation
+- [x] Add to agent tools
 
 ---
 
@@ -612,4 +616,6 @@ dbt build --full-refresh
 
 | Date | Change |
 |------|--------|
-| 2026-01-23 | Initial creation |
+| 2026-01-24 | RAG tool complete, all 3 tools working |
+| 2026-01-24 | Kafka tool complete |
+| 2026-01-23 | Initial creation, core agent complete |

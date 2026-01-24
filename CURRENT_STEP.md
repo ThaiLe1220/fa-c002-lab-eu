@@ -1,8 +1,8 @@
-# Current Step: Phase 3+4 - Core Checkboxes + Extra Features
+# Current Step: Demo Preparation
 
 **Updated:** 2026-01-24
 **Demo:** 2026-01-24
-**Status:** EXECUTING PRIORITY PLAN
+**Status:** ALL CORE COMPLETE - Ready for demo
 
 ---
 
@@ -15,148 +15,135 @@
 | Phase 4 (AI Agent Core) | DONE | 10 |
 | Phase 3 (Kafka) | DONE | 7.5 |
 | Phase 3 (Airflow) | DONE | 7.5 |
-| Phase 4 (RAG Tool) | **TO DO** | 10 |
-| Extra Features | **TO DO** | 20-40 |
+| Phase 4 (RAG Tool) | DONE | 10 |
+| Extra Features | TO DO | 20-40 |
 
-**Current Score:** ~70 pts | **Target:** 85+ pts
-
----
-
-## Execution Order (from IMPLEMENTATION_PRIORITY.md)
-
-### BLOCKING - Must Do First
-
-| # | Task | Time | Points | Status |
-|---|------|------|--------|--------|
-| 1 | Kafka Setup | 45 min | 7.5 | [x] DONE |
-| 2 | Airflow Setup | 45 min | 7.5 | [x] DONE |
-| 3 | Basic RAG (FAISS) | 60 min | 10 | [ ] |
-| 4 | Kafka Agent Tool | 15 min | 5 | [x] DONE |
-
-### QUICK WINS - Extra Points
-
-| # | Task | Time | Points | Status |
-|---|------|------|--------|--------|
-| 5 | dbt Macros | 30 min | 10-15 | [ ] |
-| 6 | dbt-expectations | 30 min | 10-15 | [ ] |
-| 7 | Document Prompts | 20 min | 5-10 | [ ] |
-
-### NICE TO HAVE - If Time Permits
-
-| # | Task | Time | Points | Status |
-|---|------|------|--------|--------|
-| 8 | Hybrid RAG | 1-2 hrs | 15-20 | [ ] |
-| 9 | Multi-Model Routing | 2-3 hrs | 15-20 | [ ] |
+**Current Score:** ~80 pts | **Target:** 85+ pts
 
 ---
 
-## Completed Work
+## All Core Checkboxes Complete
 
-### Phase 4: AI Agent Core - DONE
+| # | Task | Points | Status |
+|---|------|--------|--------|
+| 1 | Kafka Setup | 7.5 | DONE |
+| 2 | Airflow Setup | 7.5 | DONE |
+| 3 | AI Agent Core | 10 | DONE |
+| 4 | RAG Tool | 10 | DONE |
 
-**Files Created:**
-- `agent/config.py` - OpenAI configuration
-- `agent/prompts.py` - System prompt with business context
-- `agent/agent.py` - LangGraph state machine
-- `agent/app.py` - Streamlit UI
-- `agent/tools/snowflake_tools.py` - Snowflake query tool
+### Extra Points (Optional)
 
-**Test Results (9/10 Chi Linh Questions):**
-
-| # | Question | Pass |
-|---|----------|------|
-| 1 | Top spending app | PASS |
-| 2 | Why metrics changed | PASS |
-| 3 | D0 ROAS by country | PASS |
-| 4 | Revenue breakdown | PASS |
-| 5 | Data reconciliation | PASS |
-| 6 | CPI analysis | PARTIAL |
-| 7 | Installs over time | PASS |
-| 8 | Break-even analysis | PASS |
-| 9 | Profitable apps | PASS |
-| 10 | Country comparison | PASS |
-
-**Response Time:** 3-8 seconds (target < 10s)
-
-### Phase 2.5: Data Backfill - DONE
-
-| Metric | Value |
-|--------|-------|
-| Date range | Dec 25, 2025 → Jan 22, 2026 (29 days) |
-| ADJUST_DAILY | 122,895 rows |
-| ADMOB_DAILY | 109,594 rows |
-| fct_app_daily_performance | 140,546 rows |
-| dim_apps | 59 apps |
+| # | Task | Points | Status |
+|---|------|--------|--------|
+| 5 | dbt Macros | 10-15 | TO DO |
+| 6 | dbt-expectations | 10-15 | TO DO |
 
 ---
 
-## Next Actions
+## What's Implemented
 
-### Step 1: Kafka - DONE
+### AI Agent - 3 Tools
 
-**Files Created:**
-- `kafka/docker-compose.yml` - Kafka + PostgreSQL (KRaft mode)
-- `kafka/producer.py` - Generates fake alerts
-- `kafka/consumer.py` - Writes to PostgreSQL
-- `kafka/test_setup.py` - Connection tests
-- `agent/tools/kafka_tools.py` - Agent tool for alerts
+| Tool | File | Data Source |
+|------|------|-------------|
+| `query_snowflake` | `agent/tools/snowflake_tools.py` | Snowflake (batch) |
+| `query_realtime_alerts` | `agent/tools/kafka_tools.py` | PostgreSQL (streaming) |
+| `search_business_documents` | `agent/tools/rag_tools.py` | FAISS (RAG) |
 
-**Data: Alerts (unrelated to batch Snowflake data)**
-- SPEND_SPIKE, ROAS_DROP, INSTALL_SURGE, ERROR_RATE
-- Stored in PostgreSQL `streaming.alerts` table
-- Agent queries PostgreSQL via `query_realtime_alerts` tool
+### Kafka Streaming
 
-### Step 2: Airflow - DONE
+| File | Description |
+|------|-------------|
+| `kafka/docker-compose.yml` | Kafka (KRaft) + PostgreSQL |
+| `kafka/producer.py` | Generates alerts (--batch mode) |
+| `kafka/consumer.py` | Writes to PostgreSQL |
 
-**Files Created:**
-- `airflow/docker-compose.yml` - Airflow + PostgreSQL (LocalExecutor)
-- `airflow/Dockerfile` - Custom image with dbt-snowflake
-- `airflow/dags/dbt_pipeline.py` - dbt orchestration DAG
-- `airflow/profiles.yml` - dbt profile for Docker
+### Airflow Orchestration
 
-**DAG Tasks:** dbt_debug → dbt_run → dbt_test
+| File | Description |
+|------|-------------|
+| `airflow/docker-compose.yml` | Airflow + PostgreSQL |
+| `airflow/dags/dbt_pipeline.py` | debug → run → test |
 
-### Step 3: RAG (NOW)
+### RAG
+
+| File | Description |
+|------|-------------|
+| `docs/business_rules/ameno_business_rules.md` | Business rules document |
+| `agent/tools/rag_tools.py` | FAISS vector store + search |
+| `agent/rag_demo.py` | Interactive demo for explanation |
+
+---
+
+## Demo Day Commands
+
+### Start Services
 
 ```bash
-# Create agent/tools/rag_tools.py (FAISS)
-# Create docs/Business_Rules.pdf
-# Test: agent queries documents
+# Start Kafka + PostgreSQL
+cd kafka && docker-compose up -d
+
+# Start Airflow
+cd ../airflow && docker-compose up -d
+
+# Generate fresh alerts
+cd .. && uv run python kafka/producer.py --batch 30 --interval 0
 ```
 
----
-
-## Demo Day Prep
-
-### Morning Checklist
+### Test Agent
 
 ```bash
-# 1. Collect fresh data
-python scripts/collect_adjust_capstone.py --days 1
-python scripts/collect_admob_capstone.py --days 1
+# All 3 tools
+uv run python -m agent.agent -q "What's our total revenue?"
+uv run python -m agent.agent -q "Show me critical alerts"
+uv run python -m agent.agent -q "What are ROAS thresholds?"
 
-# 2. Run dbt
-cd my_dbt_project && dbt build
+# Combined query
+uv run python -m agent.agent -q "Which apps violate our business rules?"
 
-# 3. Start services
-cd kafka && docker-compose up -d
-cd airflow && docker-compose up -d
+# Interactive mode
+uv run python -m agent.agent --interactive
 
-# 4. Start Kafka producer
-uv run python kafka/producer.py &
-
-# 5. Test agent
+# Streamlit UI
 uv run streamlit run agent/app.py
 ```
 
-### Demo Flow (30 min)
+### RAG Demo (Explains Chunking + Embedding)
 
-| Time | Section | What to Show |
-|------|---------|--------------|
-| 0-5 | Real-time | Kafka producer → consumer |
-| 5-10 | Batch | Airflow DAG → dbt run |
-| 10-20 | AI Agent | Snowflake + Kafka + RAG queries |
-| 20-30 | Extra + Q&A | Macros, tests, prompts |
+```bash
+uv run python agent/rag_demo.py
+```
+
+---
+
+## Demo Flow (30 min)
+
+| Time | Phase | What to Show |
+|------|-------|--------------|
+| 0-5 | CI/CD + Kafka | Start CI, show Kafka producer/consumer |
+| 5-10 | Airflow + dbt | Show DAG, trigger run |
+| 10-20 | AI Agent + RAG | Query all 3 tools, run rag_demo.py |
+| 20-30 | Extra + Q&A | Macros/tests if done, answer questions |
+
+---
+
+## Key Talking Points
+
+1. **Three Systems → One Agent**
+   - Batch (Snowflake) for historical analysis
+   - Streaming (Kafka) for real-time alerts
+   - RAG (FAISS) for business rules
+
+2. **RAG Explanation (when asked)**
+   - Chunking: Split document into ~500 char pieces
+   - Embedding: Convert text to 1536-dim vectors (OpenAI)
+   - Search: Find similar vectors for query
+   - Run `uv run python agent/rag_demo.py` to show step by step
+
+3. **Business Value**
+   - Chi Linh can self-serve analytics
+   - No SQL knowledge required
+   - Answers in seconds, not hours
 
 ---
 
@@ -164,27 +151,7 @@ uv run streamlit run agent/app.py
 
 | Doc | Purpose |
 |-----|---------|
-| `docs/IMPLEMENTATION_PRIORITY.md` | Detailed execution plan |
-| `docs/EXTRA_FEATURES_PLAN.md` | Extra features with code |
-| `docs/PHASE4_IMPLEMENTATION.md` | Agent implementation details |
-| `docs/AGENT_GUIDE.md` | How agent works (high to low) |
-
----
-
-## Quick Commands
-
-```bash
-# Agent
-uv run python -m agent.agent
-uv run streamlit run agent/app.py
-
-# dbt
-cd my_dbt_project && dbt build
-
-# Kafka (after setup)
-cd kafka && docker-compose up -d
-uv run python kafka/producer.py
-
-# Airflow (after setup)
-cd airflow && docker-compose up -d
-```
+| `docs/PROJECT_PLAN.md` | Overall status |
+| `docs/DEMO_FLOW.md` | Demo script |
+| `docs/AGENT_GUIDE.md` | How agent works |
+| `docs/IMPLEMENTATION_PRIORITY.md` | Implementation details |

@@ -160,12 +160,11 @@ Before starting demo, confirm:
 
 **EXECUTE:**
 ```bash
-# Create temp file, commit, push, delete (triggers CI)
-echo "# Demo run $(date)" > DEMO_TRIGGER.md
-git add DEMO_TRIGGER.md
+# Add comment to SQL file (CI only triggers on .sql or my_dbt_project/** changes)
+echo "-- demo run $(date)" >> my_dbt_project/models/03_mart/dim_dates.sql
+git add my_dbt_project/
 git commit -m "demo: trigger CI $(date +%H:%M)"
 git push
-rm DEMO_TRIGGER.md
 ```
 
 **VERIFY:**
@@ -176,8 +175,6 @@ gh run list --limit 1
 **Expected:** Shows "in_progress"
 
 **SAY:** "CI is running SQLFluff and dbt tests. Let's continue."
-
-**If fails:** Skip CI demo, show last successful run: `gh run view 21308310114`
 
 ---
 
@@ -218,14 +215,30 @@ uv run python kafka/producer.py --batch 5 --interval 0
 gh run list --limit 1
 ```
 
-**If completed:**
+**If completed, show full log:**
 ```bash
-gh run view --log 2>&1 | grep -E "PASS|Completed" | tail -5
+# Get latest run ID and show log
+gh run view --log | tail -100
+```
+
+**Or show specific sections:**
+```bash
+# Show SQLFluff results
+gh run view --log | grep -A 5 "SQLFluff"
+
+# Show dbt test results
+gh run view --log | grep -E "PASS|FAIL|ERROR|Completed" | tail -20
 ```
 
 **SAY:** "26 dbt tests passed. SQLFluff checked code quality."
 
 **If still running:** "CI still running, let's check later" (move on)
+
+**If need to show previous successful run:**
+```bash
+gh run list --limit 5
+gh run view <RUN_ID> --log | tail -100
+```
 
 ---
 

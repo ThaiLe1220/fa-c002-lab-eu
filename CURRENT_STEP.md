@@ -13,12 +13,12 @@
 | Phase 0-2 | DONE | 30 |
 | Phase 2.5 (Data Backfill) | DONE | - |
 | Phase 4 (AI Agent Core) | DONE | 10 |
-| Phase 3 (Kafka) | **TO DO** | 7.5 |
+| Phase 3 (Kafka) | DONE | 7.5 |
 | Phase 3 (Airflow) | **TO DO** | 7.5 |
 | Phase 4 (RAG Tool) | **TO DO** | 10 |
 | Extra Features | **TO DO** | 20-40 |
 
-**Current Score:** ~55 pts | **Target:** 85+ pts
+**Current Score:** ~62.5 pts | **Target:** 85+ pts
 
 ---
 
@@ -28,10 +28,10 @@
 
 | # | Task | Time | Points | Status |
 |---|------|------|--------|--------|
-| 1 | Kafka Setup | 45 min | 7.5 | [ ] |
+| 1 | Kafka Setup | 45 min | 7.5 | [x] DONE |
 | 2 | Airflow Setup | 45 min | 7.5 | [ ] |
 | 3 | Basic RAG (FAISS) | 60 min | 10 | [ ] |
-| 4 | Kafka Agent Tool | 15 min | 5 | [ ] |
+| 4 | Kafka Agent Tool | 15 min | 5 | [x] DONE |
 
 ### QUICK WINS - Extra Points
 
@@ -92,24 +92,21 @@
 
 ## Next Actions
 
-### Step 1: Kafka (NOW)
+### Step 1: Kafka - DONE
 
-**Architecture:** Producer → Kafka → Consumer → PostgreSQL → Agent queries
-
-```bash
-mkdir -p kafka
-# Create docker-compose.yml (Kafka + PostgreSQL)
-# Create producer.py (fake alerts: SPEND_SPIKE, ROAS_DROP, etc.)
-# Create consumer.py (writes alerts to PostgreSQL)
-# Test: docker-compose up, then run producer + consumer
-```
+**Files Created:**
+- `kafka/docker-compose.yml` - Kafka + PostgreSQL (KRaft mode)
+- `kafka/producer.py` - Generates fake alerts
+- `kafka/consumer.py` - Writes to PostgreSQL
+- `kafka/test_setup.py` - Connection tests
+- `agent/tools/kafka_tools.py` - Agent tool for alerts
 
 **Data: Alerts (unrelated to batch Snowflake data)**
 - SPEND_SPIKE, ROAS_DROP, INSTALL_SURGE, ERROR_RATE
 - Stored in PostgreSQL `streaming.alerts` table
-- Agent queries PostgreSQL, not Kafka directly
+- Agent queries PostgreSQL via `query_realtime_alerts` tool
 
-### Step 2: Airflow (AFTER Kafka)
+### Step 2: Airflow (NOW)
 
 ```bash
 mkdir -p airflow/dags

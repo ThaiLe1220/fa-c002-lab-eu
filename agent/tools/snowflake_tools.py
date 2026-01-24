@@ -69,8 +69,8 @@ For reconciliation:
 
 ```sql
 -- ROAS (Return on Ad Spend) - profitability indicator
-d0_roas = SUM(ad_revenue_d0) / NULLIF(SUM(network_cost), 0)
-d7_roas = SUM(ad_revenue_d7) / NULLIF(SUM(network_cost), 0)
+d0_roas = SUM(ad_revenue_d0) / NULLIF(SUM(network_cost), 0) * 100
+d7_roas = SUM(ad_revenue_d7) / NULLIF(SUM(network_cost), 0) * 100
 
 -- CPI (Cost Per Install) - acquisition cost
 cpi = SUM(network_cost) / NULLIF(SUM(installs), 0)
@@ -80,6 +80,22 @@ ecpm = SUM(ad_revenue) * 1000 / NULLIF(SUM(ad_impressions), 0)
 
 -- IMPDAU (Impressions per DAU) - engagement
 impdau = SUM(ad_impressions) / NULLIF(SUM(daus), 0)
+```
+
+## IMPORTANT: ROAS Queries
+When calculating ROAS, many apps have NULL (no cost data). To show meaningful results:
+1. Filter: HAVING SUM(network_cost) > 0
+2. Sort: ORDER BY d0_roas DESC NULLS LAST
+Example:
+```sql
+SELECT a.app_name,
+       ROUND(SUM(f.ad_revenue_d0) / NULLIF(SUM(f.network_cost), 0) * 100, 1) as d0_roas
+FROM fct_app_daily_performance f
+JOIN dim_apps a ON f.app_key = a.app_key
+GROUP BY a.app_name
+HAVING SUM(f.network_cost) > 0
+ORDER BY d0_roas DESC
+LIMIT 10
 ```
 
 ## Data Context
